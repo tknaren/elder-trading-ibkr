@@ -389,6 +389,12 @@ def scan_stock(symbol: str, config: Dict = None) -> Optional[Dict]:
         'price_vs_ema': round(indicators['price_vs_ema'], 1),
         'channel_width': round(indicators['channel_width'], 1),
 
+        # Keltner Channel (KC 20,10,1) for Trade Bill
+        'kc_upper': round(indicators.get('kc_upper', current_price * 1.03), 2),
+        'kc_lower': round(indicators.get('kc_lower', current_price * 0.97), 2),
+        'kc_middle': round(indicators.get('kc_middle', current_price), 2),
+        'kc_channel_height': round(indicators.get('kc_channel_height', indicators['atr'] * 2), 2),
+
         # Divergences
         'bullish_divergence_macd': indicators['bullish_divergence_macd'],
         'bullish_divergence_rsi': indicators['bullish_divergence_rsi'],

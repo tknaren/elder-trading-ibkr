@@ -195,6 +195,47 @@ def calculate_atr(highs: pd.Series, lows: pd.Series, closes: pd.Series, period: 
     return atr
 
 
+def calculate_keltner_channel(highs: pd.Series, lows: pd.Series, closes: pd.Series, 
+                               ema_period: int = 20, atr_period: int = 10, multiplier: float = 1.0) -> dict:
+    """
+    Calculate Keltner Channel (KC)
+    
+    KC(20,10,1) = 20-period EMA ± (1 × ATR(10))
+    
+    Elder's Key Points:
+    - Upper band = resistance level
+    - Lower band = support level  
+    - Channel width indicates volatility
+    - Price at lower band in uptrend = buying opportunity
+    - Used for setting targets (upper band) and stops (below lower band)
+    
+    Args:
+        highs: High prices
+        lows: Low prices
+        closes: Closing prices
+        ema_period: EMA period for middle line (default 20)
+        atr_period: ATR period for bands (default 10)
+        multiplier: ATR multiplier (default 1.0)
+    
+    Returns:
+        Dictionary with middle, upper, lower bands and channel_height
+    """
+    middle = calculate_ema(closes, ema_period)
+    atr = calculate_atr(highs, lows, closes, atr_period)
+    
+    upper = middle + (atr * multiplier)
+    lower = middle - (atr * multiplier)
+    channel_height = upper - lower
+    
+    return {
+        'middle': middle,
+        'upper': upper,
+        'lower': lower,
+        'atr': atr,
+        'channel_height': channel_height
+    }
+
+
 def calculate_impulse_system(closes: pd.Series, ema_period: int = 13) -> dict:
     """
     Calculate Elder's Impulse System
@@ -328,6 +369,9 @@ def calculate_all_indicators(highs: pd.Series, lows: pd.Series,
     atr = calculate_atr(highs, lows, closes)
     impulse = calculate_impulse_system(closes)
     
+    # Keltner Channel (KC 20,10,1) for channel trading
+    keltner = calculate_keltner_channel(highs, lows, closes, ema_period=20, atr_period=10, multiplier=1.0)
+    
     # Divergences
     macd_divergence = detect_divergence(closes, macd['histogram'])
     rsi_divergence = detect_divergence(closes, rsi)
@@ -353,7 +397,12 @@ def calculate_all_indicators(highs: pd.Series, lows: pd.Series,
         'bullish_divergence_macd': macd_divergence['bullish'],
         'bullish_divergence_rsi': rsi_divergence['bullish'],
         'bearish_divergence_macd': macd_divergence['bearish'],
-        'bearish_divergence_rsi': rsi_divergence['bearish']
+        'bearish_divergence_rsi': rsi_divergence['bearish'],
+        # Keltner Channel values (KC 20,10,1)
+        'kc_upper': keltner['upper'].iloc[-1],
+        'kc_lower': keltner['lower'].iloc[-1],
+        'kc_middle': keltner['middle'].iloc[-1],
+        'kc_channel_height': keltner['channel_height'].iloc[-1]
     }
     
     # Calculate interpretations
