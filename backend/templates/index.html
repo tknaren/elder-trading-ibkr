@@ -344,10 +344,16 @@
 
     function closeModal() { document.getElementById('modal').classList.add('hidden'); }
 
+    async function newTradeBill() {
+        window.tradeBillTemplate = {};  // Clear any previous data for a fresh form
+        await switchTab('trade-bill');
+    }
+
     async function createTradeBillFromStock(stock) {
         closeModal();
-        await switchTab('trade-bill');
+        // Clear previous template completely and set ONLY fresh data from stock (no ID for new bills)
         window.tradeBillTemplate = {
+            // Do NOT include 'id' - this is a NEW bill
             ticker: stock.symbol,
             current_market_price: stock.price,
             entry_price: stock.entry,
@@ -357,6 +363,7 @@
             lower_channel: stock.price * 0.95,
             risk_percent: stock.risk_percent
         };
+        await switchTab('trade-bill');
     }
 
     async function addToWatchlist(symbol) {
@@ -627,40 +634,104 @@
     }
 
     function calculateTradeBillMetrics() {
+        // Get input values
         const entry = parseFloat(document.getElementById('tb-entry').value);
         const sl = parseFloat(document.getElementById('tb-sl').value);
         const target = parseFloat(document.getElementById('tb-target').value);
-        const qty = parseFloat(document.getElementById('tb-qty').value);
-        const s = settings[0] || {trading_capital:6000, risk_per_trade:2};
+        const cmp = parseFloat(document.getElementById('tb-cmp').value);
+        const upperChannel = parseFloat(document.getElementById('tb-uc').value);
+        const lowerChannel = parseFloat(document.getElementById('tb-lc').value);
+        const manualQty = parseFloat(document.getElementById('tb-qty').value);
+        
+        const s = settings[0] || {trading_capital: 6000, risk_per_trade: 2, currency: 'GBP'};
+        const maxRiskAllowed = (s.trading_capital * s.risk_per_trade / 100);  // Max $ risk per trade
 
-        if (!entry || !sl || !target || !qty) {
-            toast('Please fill in Entry, Stop Loss, Target, and Quantity', 'error');
+        // Validation
+        if (!entry || !sl || !target) {
+            toast('Please fill in Entry, Stop Loss, and Target', 'error');
             return;
         }
 
-        const riskPerShare = Math.abs(entry - sl);
-        const targetPips = Math.abs(target - entry);
-        const positionSize = qty * entry;
-        const riskAmount = qty * riskPerShare;
-        const rewardAmount = qty * targetPips;
-        const riskPercent = (riskAmount / s.trading_capital) * 100;
-        const rrRatio = rewardAmount / riskAmount;
-        const channelHeight = Math.abs(
-            (parseFloat(document.getElementById('tb-uc').value) || 0) - 
-            (parseFloat(document.getElementById('tb-lc').value) || 0)
-        );
+        // 1. Calculate Quantity based on Max Risk and Stop Loss distance
+        const slDistance = Math.abs(entry - sl);  // Distance in $
+        let qty;
+        if (manualQty && manualQty > 0) {
+            qty = manualQty;  // Use manual if entered
+        } else {
+            qty = slDistance > 0 ? (maxRiskAllowed / slDistance) : 0;
+        }
 
+        // 2. Upper/Lower Channel - use entered values or calculate from price
+        let uc = upperChannel;
+        let lc = lowerChannel;
+        if (!uc || !lc) {
+            // Default to ±5% of current price if not specified
+            const basePrice = cmp || entry;
+            uc = basePrice * 1.05;
+            lc = basePrice * 0.95;
+        }
+
+        // 3. Target Pips - distance from entry to target (in $)
+        const targetPips = Math.abs(target - entry);
+        
+        // 4. SL Pips - distance from entry to stop loss (in $)
+        const slPips = slDistance;
+        
+        // 5. Max Qty for Risk = Quantity (same value)
+        const maxQtyForRisk = qty;
+        
+        // 6. Risk per Share = Max Risk / Quantity
+        const riskPerShare = qty > 0 ? (maxRiskAllowed / qty) : slDistance;
+        
+        // 7. Position Size = Entry Price * Quantity
+        const positionSize = entry * qty;
+        
+        // 8. Risk % = (Entry - SL) * Quantity / Trading Capital * 100
+        const riskPercent = (slDistance * qty / s.trading_capital) * 100;
+        
+        // 9. Channel Height - measured in stock price ($)
+        const channelHeight = Math.abs(uc - lc);
+        
+        // 10. Potential Gain = (Target - Entry) * Quantity (in $)
+        const potentialGain = targetPips * qty;
+        
+        // 11. A, B, C Targets - evenly distributed between Entry and Target (in $)
+        const targetRange = target - entry;
+        const targetC = entry + (targetRange * 0.33);  // 1:1 ratio
+        const targetB = entry + (targetRange * 0.67);  // 1:2 ratio
+        const targetA = target;                         // 1:3 ratio
+        
+        // Risk and Reward (in $)
+        const riskAmount = slDistance * qty;           // $ risk if stopped out
+        const rewardAmount = targetPips * qty;         // $ gain if target hit
+        const rrRatio = riskAmount > 0 ? (rewardAmount / riskAmount) : 0;
+        
+        // 12. Break Even = Entry Price (in $)
+        const breakEven = entry;
+        
+        // 13. Trailing Stop (in $) - can be set by user or default to SL
+        const trailingStop = sl;
+
+        // Update all form fields
+        document.getElementById('tb-qty').value = qty.toFixed(1);
+        document.getElementById('tb-uc').value = uc.toFixed(2);
+        document.getElementById('tb-lc').value = lc.toFixed(2);
         document.getElementById('tb-tp').value = targetPips.toFixed(2);
-        document.getElementById('tb-slp').value = riskPerShare.toFixed(2);
+        document.getElementById('tb-slp').value = slPips.toFixed(2);
+        document.getElementById('tb-maxqty').value = maxQtyForRisk.toFixed(2);
         document.getElementById('tb-rps').value = riskPerShare.toFixed(2);
         document.getElementById('tb-ps').value = positionSize.toFixed(2);
         document.getElementById('tb-rp').value = riskPercent.toFixed(2);
-        document.getElementById('tb-pg').value = rewardAmount.toFixed(2);
-        document.getElementById('tb-maxqty').value = ((s.trading_capital * s.risk_per_trade / 100) / riskPerShare).toFixed(2);
         document.getElementById('tb-ch').value = channelHeight.toFixed(2);
+        document.getElementById('tb-pg').value = potentialGain.toFixed(2);
+        document.getElementById('tb-c').value = targetC.toFixed(2);
+        document.getElementById('tb-b').value = targetB.toFixed(2);
+        document.getElementById('tb-a').value = targetA.toFixed(2);
         document.getElementById('tb-risk').value = riskAmount.toFixed(2);
+        document.getElementById('tb-reward').value = rewardAmount.toFixed(2);
         document.getElementById('tb-rrr').value = rrRatio.toFixed(2);
-        document.getElementById('tb-be').value = entry.toFixed(2);
+        document.getElementById('tb-be').value = breakEven.toFixed(2);
+        document.getElementById('tb-ts').value = trailingStop.toFixed(2);
 
         toast('Metrics calculated!', 'success');
     }
@@ -748,7 +819,7 @@
                 <div class="space-y-6">
                     <div class="flex justify-between items-center">
                         <h2 class="text-2xl font-bold">📋 Trade Bills</h2>
-                        <button onclick="switchTab('trade-bill')" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700">➕ New Trade Bill</button>
+                        <button onclick="newTradeBill()" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700">➕ New Trade Bill</button>
                     </div>
 
                     ${bills.length > 0 ? `
@@ -800,7 +871,7 @@
                             <div class="text-6xl mb-4">📋</div>
                             <h3 class="text-xl font-semibold">No Trade Bills yet</h3>
                             <p class="mt-2">Create your first trade bill to get started</p>
-                            <button onclick="switchTab('trade-bill')" class="mt-4 px-6 py-2 bg-blue-600 rounded-lg hover:bg-blue-700">Create Trade Bill</button>
+                            <button onclick="newTradeBill()" class="mt-4 px-6 py-2 bg-blue-600 rounded-lg hover:bg-blue-700">Create Trade Bill</button>
                         </div>
                     `}
                 </div>
