@@ -1,0 +1,134 @@
+        private void CalculateAutomaticFields()
+        {
+            try
+            {
+                double riskPerShare, riskPerSharePercent, maxRisk, maxQtyAlloc, maxQtyRisk, affordToLoose, quantity, tradeSize, hardStopRiskPer, hardStopRisk,
+                    softStopRiskPer, softStopRisk, reward, rewardRatio, aTrade, bTrade, cTrade, channelHeight, potentialGain, targetPips, stopLossPips;
+
+                string riskRewardRatio = string.Empty;
+
+                var acSize = double.TryParse(txtAcSize.Text, out double acsize) ? acsize : 0;
+                var riskPerTradePercent = double.TryParse(txtRiskPerTradePercentage.Text, out double riskPerTradePer) ? riskPerTradePer : 0;
+                var shareAllocPercent = double.TryParse(txtAllocationPerShare.Text, out double aps) ? aps : 0;
+                var price = double.TryParse(txtPrice.Text, out double prc) ? prc : 0;
+                var entry = double.TryParse(txtEntry.Text, out double ent) ? ent : 0;
+                var target = double.TryParse(txtTarget.Text, out double tar) ? tar : 0;
+                var stopLoss = double.TryParse(txtStopLoss.Text, out double sl) ? sl : 0;
+                var hardStop = double.TryParse(txtHardStop.Text, out double hrdStop) ? hrdStop : stopLoss;
+                var softStop = double.TryParse(txtSoftStop.Text, out double sftStop) ? sftStop : 0;
+                //var quantity = double.TryParse(txtQuantity.Text, out double qty) ? qty : 0;
+                var upperChannel = double.TryParse(txtUpperChannel.Text, out double upChnl) ? upChnl : 0;
+                var lowerChannel = double.TryParse(txtLowerChannel.Text, out double lowChnl) ? lowChnl : 0;
+                var riskRemaining = double.TryParse(txtRiskRemainingPercentage.Text, out double rrp) ? rrp : 0;
+
+                if (cmbDirection.Text == "LONG")
+                {
+                    riskPerShare = Math.Round(entry - stopLoss, 2);
+                    riskPerSharePercent = Math.Round((riskPerShare / entry) * 100, 2);
+
+                    maxRisk = Math.Round(acSize * (riskPerTradePercent / 100), 2);
+                    maxQtyAlloc = Math.Round(acSize * (shareAllocPercent / 100) / price, decimalPlaces);
+                    maxQtyRisk = Math.Round(acSize * (riskPerTradePercent / 100) / riskPerShare, decimalPlaces);
+                    affordToLoose = Math.Round(acSize * (riskRemaining / 100), 2);
+
+                    quantity = maxQtyRisk <= maxQtyAlloc ? maxQtyRisk : maxQtyAlloc;
+                    //quantity = maxQtyRisk;
+                    tradeSize = quantity * entry;
+
+                    hardStopRiskPer = Math.Round(((entry - hardStop) / entry) * 100, 2);
+                    hardStopRisk = Math.Round((entry - hardStop) * quantity, 2);
+                    softStopRiskPer = Math.Round(((entry - softStop) / entry) * 100, 2);
+                    softStopRisk = Math.Round((entry - softStop) * quantity, 2);
+
+                    targetPips = Math.Round((target - entry), 2) * 100;
+                    stopLossPips = Math.Round((entry - stopLoss), 2) * 100;
+
+                    channelHeight = upperChannel - lowerChannel;
+                    aTrade = entry + (channelHeight * 0.30);
+                    bTrade = entry + (channelHeight * 0.20);
+                    cTrade = entry + (channelHeight * 0.10);
+
+                    potentialGain = Math.Round(((upperChannel - entry) / entry) * 100, 2);
+                    if (potentialGain >= 10) potentialGain = 9.9;
+
+                    reward = Math.Round((target - entry) * quantity, 2);
+
+                    rewardRatio = double.TryParse(Math.Round(reward / hardStopRisk, 2).ToString(), out double rew) ? rew : 0;
+                    riskRewardRatio = "1:" + rewardRatio.ToString();
+
+
+
+                }
+                else if (cmbDirection.Text == "SHORT")
+                {
+                    riskPerShare = Math.Round(stopLoss - entry, 2);
+                    riskPerSharePercent = Math.Round((riskPerShare / entry) * 100, 2);
+
+                    maxRisk = Math.Round(acSize * (riskPerTradePercent / 100), 2);
+                    maxQtyAlloc = Math.Round(acSize * (shareAllocPercent / 100) / price, decimalPlaces);
+                    maxQtyRisk = Math.Round(acSize * (riskPerTradePercent / 100) / riskPerShare, decimalPlaces);
+                    affordToLoose = Math.Round(acSize * (riskRemaining / 100), 2);
+
+                    quantity = maxQtyRisk <= maxQtyAlloc ? maxQtyRisk : maxQtyAlloc;
+                    //quantity = maxQtyRisk;
+                    tradeSize = quantity * entry;
+
+                    hardStopRiskPer = Math.Round(((hardStop - entry) / entry) * 100, 2);
+                    hardStopRisk = Math.Round((hardStop - entry) * quantity, 2);
+                    softStopRiskPer = Math.Round(((softStop - entry) / entry) * 100, 2);
+                    softStopRisk = Math.Round((softStop - entry) * quantity, 2);
+
+                    targetPips = Math.Round((entry - target), 2) * 100;
+                    stopLossPips = Math.Round((stopLoss - entry), 2) * 100;
+
+                    channelHeight = upperChannel - lowerChannel;
+                    aTrade = entry - (channelHeight * 0.30);
+                    bTrade = entry - (channelHeight * 0.20);
+                    cTrade = entry - (channelHeight * 0.10);
+
+                    potentialGain = Math.Round(((entry - lowerChannel) / entry) * 100, 2);
+                    if (potentialGain >= 10) potentialGain = 9.9;
+
+                    reward = Math.Round((entry - target) * quantity, 2);
+
+                    rewardRatio = double.TryParse(Math.Round(reward / hardStopRisk, 2).ToString(), out double rew) ? rew : 0;
+                    riskRewardRatio = "1:" + rewardRatio.ToString();
+                }
+                else
+                {
+                    return;
+                }
+
+                txtAffordToLoosePercentage.Text = double.IsNaN(affordToLoose) ? String.Empty : affordToLoose.ToString();
+                txtMaxRisk.Text = double.IsNaN(maxRisk) ? String.Empty : maxRisk.ToString();
+                txtMaxQtyPerAlloc.Text = double.IsNaN(maxQtyAlloc) ? String.Empty : maxQtyAlloc.ToString();
+                txtMaxQtyPerRisk.Text = double.IsNaN(maxQtyRisk) ? String.Empty : maxQtyRisk.ToString();
+
+                txtQuantity.Text = Math.Round(double.IsNaN(quantity) ? 0 : quantity, 2).ToString();
+                txtTradeSize.Text = Math.Round(double.IsNaN(tradeSize) ? 0 : tradeSize, 2).ToString();
+                txtRiskPerShare.Text = Math.Round(double.IsNaN(riskPerShare) ? 0 : riskPerShare, 2).ToString();
+                txtRiskPerSharePercentage.Text = Math.Round(double.IsNaN(riskPerSharePercent) ? 0 : riskPerSharePercent, 2).ToString();
+
+                txtHardStopRisk.Text = Math.Round(double.IsNaN(hardStopRisk) ? 0 : hardStopRisk, 2).ToString();
+                txtHardStopRiskPercentage.Text = Math.Round(double.IsNaN(hardStopRiskPer) ? 0 : hardStopRiskPer, 2).ToString();
+                txtSoftStopRisk.Text = Math.Round(double.IsNaN(softStopRisk) ? 0 : softStopRisk, 2).ToString();
+                txtSoftStopRiskPercentage.Text = Math.Round(double.IsNaN(softStopRiskPer) ? 0 : softStopRiskPer, 2).ToString();
+
+                txtTargetPips.Text = Math.Round(double.IsNaN(targetPips) ? 0 : targetPips, 2).ToString();
+                txtStopLossPips.Text = Math.Round(double.IsNaN(stopLossPips) ? 0 : stopLossPips, 2).ToString();
+
+                txtChannelHeight.Text = Math.Round(double.IsNaN(channelHeight) ? 0 : channelHeight, 2).ToString();
+                txtPotentialGain.Text = Math.Round(double.IsNaN(potentialGain) ? 0 : potentialGain, 2).ToString();
+                txtATarget.Text = Math.Round(double.IsNaN(aTrade) ? 0 : aTrade, 2).ToString();
+                txtBTarget.Text = Math.Round(double.IsNaN(bTrade) ? 0 : bTrade, 2).ToString();
+                txtCTarget.Text = Math.Round(double.IsNaN(cTrade) ? 0 : cTrade, 2).ToString();
+
+                txtRisk.Text = Math.Round(double.IsNaN(hardStopRisk) ? 0 : hardStopRisk, 2).ToString();
+                txtReward.Text = Math.Round(double.IsNaN(reward) ? 0 : reward, 2).ToString();
+                txtRiskRewardRatio.Text = riskRewardRatio.ToString();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Divide by Zero exception");
+            }
+        }

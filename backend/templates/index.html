@@ -99,7 +99,7 @@
     async function render() {
         const c = document.getElementById('content');
         if(currentTab==='screener') c.innerHTML = screenView();
-        else if(currentTab==='trade-bill') c.innerHTML = tradeBillView();
+        else if(currentTab==='trade-bill') { c.innerHTML = tradeBillView(); triggerTradeBillCalc(); }
         else if(currentTab==='trade-bills') c.innerHTML = await tradeBillsView();
         else if(currentTab==='account') c.innerHTML = await accountView();
         else if(currentTab==='journal') c.innerHTML = journalView();
@@ -552,19 +552,19 @@
                             <input id="tb-ticker" value="${tb.ticker||''}" placeholder="AAPL" onkeyup="handleTickerTypeahead(event)" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono">
                             <div id="ticker-suggestions" class="mt-1 bg-[#1f2937] rounded-lg border border-gray-600 max-h-40 overflow-y-auto"></div>
                         </div>
-                        <div><label class="text-sm text-gray-400">Current Market Price (${sym})</label><input id="tb-cmp" type="number" value="${tb.current_market_price||''}" step="0.01" placeholder="150.25" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
-                        <div><label class="text-sm text-gray-400">Entry Price (${sym})</label><input id="tb-entry" type="number" value="${tb.entry_price||''}" step="0.01" placeholder="148.50" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
+                        <div><label class="text-sm text-gray-400">Current Market Price (${sym})</label><input id="tb-cmp" type="number" value="${tb.current_market_price||''}" step="0.01" placeholder="150.25" oninput="autoCalculateTradeBill()" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
+                        <div><label class="text-sm text-gray-400">Entry Price (${sym})</label><input id="tb-entry" type="number" value="${tb.entry_price||''}" step="0.01" placeholder="148.50" oninput="autoCalculateTradeBill()" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
                     </div>
                     <div class="grid grid-cols-3 gap-4">
-                        <div><label class="text-sm text-gray-400">Stop Loss (${sym})</label><input id="tb-sl" type="number" value="${tb.stop_loss||''}" step="0.01" placeholder="145.00" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
-                        <div><label class="text-sm text-gray-400">Target (${sym}) <span class="text-xs text-gray-500">(auto: B target)</span></label><input id="tb-target" type="number" value="${tb.target_price||''}" step="0.01" placeholder="155.00" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
-                        <div><label class="text-sm text-gray-400">Quantity (shares)</label><input id="tb-qty" type="number" value="${tb.quantity||''}" step="1" placeholder="10" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
+                        <div><label class="text-sm text-gray-400">Stop Loss (${sym})</label><input id="tb-sl" type="number" value="${tb.stop_loss||''}" step="0.01" placeholder="145.00" oninput="autoCalculateTradeBill()" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
+                        <div><label class="text-sm text-gray-400">Target (${sym})</label><input id="tb-target" type="number" value="${tb.target_price||''}" step="0.01" placeholder="155.00" oninput="autoCalculateTradeBill()" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
+                        <div><label class="text-sm text-gray-400">Quantity (shares)</label><input id="tb-qty" type="number" value="${tb.quantity||''}" step="0.01" placeholder="auto" oninput="autoCalculateTradeBill()" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
                     </div>
                     <div class="grid grid-cols-4 gap-4">
-                        <div><label class="text-sm text-gray-400">Upper Channel (${sym})</label><input id="tb-uc" type="number" value="${tb.upper_channel||''}" step="0.01" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
-                        <div><label class="text-sm text-gray-400">Lower Channel (${sym})</label><input id="tb-lc" type="number" value="${tb.lower_channel||''}" step="0.01" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
-                        <div><label class="text-sm text-gray-400">Target Pips (${sym})</label><input id="tb-tp" type="number" value="${tb.target_pips||''}" step="0.01" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono bg-gray-800" readonly></div>
-                        <div><label class="text-sm text-gray-400">SL Pips (${sym})</label><input id="tb-slp" type="number" value="${tb.stop_loss_pips||''}" step="0.01" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono bg-gray-800" readonly></div>
+                        <div><label class="text-sm text-gray-400">Upper Channel (${sym})</label><input id="tb-uc" type="number" value="${tb.upper_channel||''}" step="0.01" oninput="autoCalculateTradeBill()" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
+                        <div><label class="text-sm text-gray-400">Lower Channel (${sym})</label><input id="tb-lc" type="number" value="${tb.lower_channel||''}" step="0.01" oninput="autoCalculateTradeBill()" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono"></div>
+                        <div><label class="text-sm text-gray-400">Target Pips</label><input id="tb-tp" type="number" value="${tb.target_pips||''}" step="0.01" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono bg-gray-800" readonly></div>
+                        <div><label class="text-sm text-gray-400">SL Pips</label><input id="tb-slp" type="number" value="${tb.stop_loss_pips||''}" step="0.01" class="w-full mt-1 px-3 py-2 bg-[#1f2937] border border-gray-600 rounded-lg font-mono bg-gray-800" readonly></div>
                     </div>
                 </div>
 
@@ -639,22 +639,24 @@
 
                 <!-- Elder Calculation Reference -->
                 <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
-                    <h3 class="font-bold text-lg text-gray-400 mb-3">📖 Elder Calculation Reference</h3>
+                    <h3 class="font-bold text-lg text-gray-400 mb-3">📖 Calculation Reference</h3>
                     <div class="grid grid-cols-2 gap-4 text-xs text-gray-500">
                         <div class="space-y-1">
-                            <p><span class="text-blue-400">Quantity</span> = Max Risk (${sym}${(s.trading_capital * s.risk_per_trade / 100).toFixed(0)}) ÷ Risk per Share</p>
                             <p><span class="text-blue-400">Risk per Share</span> = Entry − Stop Loss</p>
                             <p><span class="text-blue-400">Risk %</span> = (Risk per Share ÷ Entry) × 100</p>
+                            <p><span class="text-blue-400">Max Qty</span> = Max Risk ÷ Risk per Share</p>
                             <p><span class="text-blue-400">Position Size</span> = Entry × Quantity</p>
+                            <p><span class="text-blue-400">Target/SL Pips</span> = Distance × 100</p>
                         </div>
                         <div class="space-y-1">
-                            <p><span class="text-yellow-400">C Target (1:1)</span> = Entry + (1 × Risk per Share)</p>
-                            <p><span class="text-green-400">B Target (1:2)</span> = Entry + (2 × Risk per Share) ★</p>
-                            <p><span class="text-blue-400">A Target (1:3)</span> = Entry + (3 × Risk per Share)</p>
-                            <p><span class="text-green-400">R:R Ratio</span> = Reward ÷ Risk (based on B target)</p>
+                            <p><span class="text-blue-400">Channel Height</span> = Upper − Lower Channel</p>
+                            <p><span class="text-yellow-400">C Target</span> = Entry + (Channel × 0.10)</p>
+                            <p><span class="text-green-400">B Target</span> = Entry + (Channel × 0.20)</p>
+                            <p><span class="text-blue-400">A Target</span> = Entry + (Channel × 0.30)</p>
+                            <p><span class="text-green-400">R:R</span> = Reward ÷ Risk</p>
                         </div>
                     </div>
-                    <p class="text-xs text-gray-600 mt-2">Channel: KC(20,10,1) = 20-period EMA ± ATR(10)</p>
+                    <p class="text-xs text-gray-600 mt-2">Potential Gain % = ((Upper Channel − Entry) ÷ Entry) × 100 (max 9.9%)</p>
                 </div>
 
                 <!-- Save Button -->
@@ -666,122 +668,114 @@
         `;
     }
 
+    // Auto-calculate when trade bill view is rendered
+    function triggerTradeBillCalc() {
+        setTimeout(() => {
+            if (document.getElementById('tb-entry')) {
+                autoCalculateTradeBill();
+            }
+        }, 100);
+    }
+
     function calculateTradeBillMetrics() {
+        autoCalculateTradeBill();
+        toast('Metrics calculated!', 'success');
+    }
+
+    function autoCalculateTradeBill() {
         // Get input values
-        const entry = parseFloat(document.getElementById('tb-entry').value);
-        const sl = parseFloat(document.getElementById('tb-sl').value);
-        const target = parseFloat(document.getElementById('tb-target').value);
-        const cmp = parseFloat(document.getElementById('tb-cmp').value);
-        const upperChannel = parseFloat(document.getElementById('tb-uc').value);
-        const lowerChannel = parseFloat(document.getElementById('tb-lc').value);
-        const manualQty = parseFloat(document.getElementById('tb-qty').value);
+        const entry = parseFloat(document.getElementById('tb-entry').value) || 0;
+        const sl = parseFloat(document.getElementById('tb-sl').value) || 0;
+        const target = parseFloat(document.getElementById('tb-target').value) || 0;
+        const cmp = parseFloat(document.getElementById('tb-cmp').value) || 0;
+        const upperChannel = parseFloat(document.getElementById('tb-uc').value) || 0;
+        const lowerChannel = parseFloat(document.getElementById('tb-lc').value) || 0;
+        const manualQty = parseFloat(document.getElementById('tb-qty').value) || 0;
         const overnightCharges = parseFloat(document.getElementById('tb-oc').value) || 0;
         
         const s = settings[0] || {trading_capital: 6000, risk_per_trade: 2, currency: 'GBP'};
-        const maxRiskAllowed = (s.trading_capital * s.risk_per_trade / 100);  // Max $ risk per trade
+        const acSize = s.trading_capital;
+        const riskPerTradePercent = s.risk_per_trade;
 
-        // Validation
-        if (!entry || !sl) {
-            toast('Please fill in Entry and Stop Loss', 'error');
-            return;
-        }
+        // Need at least entry and stop loss
+        if (!entry || !sl) return;
 
-        // === ELDER TRADING CALCULATIONS ===
+        // === CALCULATIONS MATCHING .NET APP (LONG direction) ===
         
-        // 1. Risk per Share = Entry - SL (the distance between entry and stop)
-        const riskPerShare = Math.abs(entry - sl);
+        // Risk per Share = Entry - Stop Loss
+        const riskPerShare = Math.round((entry - sl) * 100) / 100;
+        if (riskPerShare <= 0) return;  // Invalid stop loss
         
-        // 2. Calculate Quantity = Max Risk Amount / Risk per Share
-        let qty;
-        if (manualQty && manualQty > 0) {
-            qty = manualQty;  // Use manual if entered
-        } else {
-            qty = riskPerShare > 0 ? Math.floor(maxRiskAllowed / riskPerShare) : 0;
-        }
-
-        // 3. Upper/Lower Channel - use Keltner Channel concept or entered values
-        // KC(20,10,1) = 20-period EMA ± 1× ATR(10)
-        // If not provided, estimate based on price volatility (approx ±3-5% for most stocks)
-        let uc = upperChannel;
-        let lc = lowerChannel;
-        if (!uc || !lc) {
-            const basePrice = cmp || entry;
-            // Default estimate: use 3% channel (conservative for swing trading)
-            uc = basePrice * 1.03;
-            lc = basePrice * 0.97;
-        }
-
-        // 4. Target Pips = Target - Entry (distance from entry to target)
-        const targetPips = target ? Math.abs(target - entry) : 0;
+        // Risk per Share % = (Risk per Share / Entry) × 100
+        const riskPerSharePercent = Math.round((riskPerShare / entry) * 100 * 100) / 100;
         
-        // 5. SL Pips = Entry - SL (distance from entry to stop loss)
-        const slPips = riskPerShare;
+        // Max Risk = Account Size × (Risk% / 100)
+        const maxRisk = Math.round(acSize * (riskPerTradePercent / 100) * 100) / 100;
         
-        // 6. Max Qty for Risk = Max Risk Amount / Risk per Share
-        const maxQtyForRisk = riskPerShare > 0 ? Math.floor(maxRiskAllowed / riskPerShare) : 0;
+        // Max Qty for Risk = Max Risk / Risk per Share
+        const maxQtyRisk = riskPerShare > 0 ? Math.round(maxRisk / riskPerShare * 100) / 100 : 0;
         
-        // 7. Position Size = Entry × Quantity
-        const positionSize = entry * qty;
+        // Quantity (use manual if entered, otherwise maxQtyRisk)
+        const quantity = manualQty > 0 ? manualQty : maxQtyRisk;
         
-        // 8. Risk % = (Risk per share / Entry) × 100
-        const riskPercent = entry > 0 ? (riskPerShare / entry) * 100 : 0;
+        // Trade Size (Position Size) = Quantity × Entry
+        const tradeSize = Math.round(quantity * entry * 100) / 100;
         
-        // 9. Channel Height = Upper Channel - Lower Channel (from KC 20,10,1)
-        const channelHeight = Math.abs(uc - lc);
+        // Target Pips = (Target - Entry) × 100
+        const targetPips = target ? Math.round((target - entry) * 100 * 100) / 100 : 0;
         
-        // 10. A, B, C Targets based on R:R ratios (Elder methodology)
-        // C Target (1:1 R:R) = Entry + Risk per share × 1
-        // B Target (1:2 R:R) = Entry + Risk per share × 2
-        // A Target (1:3 R:R) = Entry + Risk per share × 3
-        const targetC = entry + (riskPerShare * 1);  // 1:1 R:R
-        const targetB = entry + (riskPerShare * 2);  // 1:2 R:R
-        const targetA = entry + (riskPerShare * 3);  // 1:3 R:R
+        // SL Pips = (Entry - Stop Loss) × 100
+        const stopLossPips = Math.round((entry - sl) * 100 * 100) / 100;
         
-        // 11. Potential Gain = (Target - Entry) × Quantity (based on user target if provided)
-        const potentialGain = target ? (Math.abs(target - entry) * qty) : (targetB - entry) * qty;
+        // Channel Height = Upper Channel - Lower Channel
+        const channelHeight = upperChannel && lowerChannel ? Math.round((upperChannel - lowerChannel) * 100) / 100 : 0;
         
-        // 12. Risk Amount = Risk per share × Quantity ($ risk if stopped out)
-        const riskAmount = riskPerShare * qty;
+        // A, B, C Targets based on Channel Height (Elder's channel trading)
+        // A Target = Entry + (Channel Height × 0.30)
+        // B Target = Entry + (Channel Height × 0.20)
+        // C Target = Entry + (Channel Height × 0.10)
+        const aTrade = channelHeight > 0 ? Math.round((entry + (channelHeight * 0.30)) * 100) / 100 : 0;
+        const bTrade = channelHeight > 0 ? Math.round((entry + (channelHeight * 0.20)) * 100) / 100 : 0;
+        const cTrade = channelHeight > 0 ? Math.round((entry + (channelHeight * 0.10)) * 100) / 100 : 0;
         
-        // 13. Reward Amount = (B Target - Entry) × Quantity (based on B target for 1:2 R:R)
-        const rewardAmount = (targetB - entry) * qty;
+        // Potential Gain % = ((Upper Channel - Entry) / Entry) × 100 (capped at 9.9%)
+        let potentialGain = upperChannel > 0 ? Math.round(((upperChannel - entry) / entry) * 100 * 100) / 100 : 0;
+        if (potentialGain >= 10) potentialGain = 9.9;
         
-        // 14. R:R Ratio = Reward / Risk (should be 2.0 for B target)
-        const rrRatio = riskAmount > 0 ? (rewardAmount / riskAmount) : 0;
+        // Risk = (Entry - Stop Loss) × Quantity (hard stop risk)
+        const risk = Math.round(riskPerShare * quantity * 100) / 100;
         
-        // 15. Break Even = Entry + (overnight charges / qty) if applicable
-        const breakEven = qty > 0 ? entry + (overnightCharges / qty) : entry;
+        // Reward = (Target - Entry) × Quantity
+        const reward = target ? Math.round((target - entry) * quantity * 100) / 100 : 0;
         
-        // 16. Trailing Stop = SL initially, can be adjusted
+        // R:R Ratio = Reward / Risk
+        const rewardRatio = risk > 0 && reward > 0 ? Math.round((reward / risk) * 100) / 100 : 0;
+        const riskRewardRatio = rewardRatio > 0 ? `1:${rewardRatio}` : '';
+        
+        // Break Even = Entry (or Entry + overnight charges per share)
+        const breakEven = quantity > 0 && overnightCharges > 0 ? Math.round((entry + (overnightCharges / quantity)) * 100) / 100 : entry;
+        
+        // Trailing Stop = Stop Loss initially
         const trailingStop = sl;
 
-        // Update all form fields with $ formatting (2 decimal places max)
-        document.getElementById('tb-qty').value = qty.toFixed(0);  // Whole shares for most brokers
-        document.getElementById('tb-uc').value = uc.toFixed(2);
-        document.getElementById('tb-lc').value = lc.toFixed(2);
+        // Update all form fields
+        if (!manualQty) document.getElementById('tb-qty').value = quantity.toFixed(2);
         document.getElementById('tb-tp').value = targetPips.toFixed(2);
-        document.getElementById('tb-slp').value = slPips.toFixed(2);
-        document.getElementById('tb-maxqty').value = maxQtyForRisk.toFixed(0);
+        document.getElementById('tb-slp').value = stopLossPips.toFixed(2);
+        document.getElementById('tb-maxqty').value = maxQtyRisk.toFixed(2);
         document.getElementById('tb-rps').value = riskPerShare.toFixed(2);
-        document.getElementById('tb-ps').value = positionSize.toFixed(2);
-        document.getElementById('tb-rp').value = riskPercent.toFixed(2);
+        document.getElementById('tb-ps').value = tradeSize.toFixed(2);
+        document.getElementById('tb-rp').value = riskPerSharePercent.toFixed(2);
         document.getElementById('tb-ch').value = channelHeight.toFixed(2);
         document.getElementById('tb-pg').value = potentialGain.toFixed(2);
-        document.getElementById('tb-c').value = targetC.toFixed(2);
-        document.getElementById('tb-b').value = targetB.toFixed(2);
-        document.getElementById('tb-a').value = targetA.toFixed(2);
-        document.getElementById('tb-risk').value = riskAmount.toFixed(2);
-        document.getElementById('tb-reward').value = rewardAmount.toFixed(2);
-        document.getElementById('tb-rrr').value = rrRatio.toFixed(2);
+        document.getElementById('tb-c').value = cTrade.toFixed(2);
+        document.getElementById('tb-b').value = bTrade.toFixed(2);
+        document.getElementById('tb-a').value = aTrade.toFixed(2);
+        document.getElementById('tb-risk').value = risk.toFixed(2);
+        document.getElementById('tb-reward').value = reward.toFixed(2);
+        document.getElementById('tb-rrr').value = riskRewardRatio;
         document.getElementById('tb-be').value = breakEven.toFixed(2);
         document.getElementById('tb-ts').value = trailingStop.toFixed(2);
-        
-        // Auto-fill Target if empty (use B target as default)
-        if (!target) {
-            document.getElementById('tb-target').value = targetB.toFixed(2);
-        }
-
-        toast('Metrics calculated using Elder methodology!', 'success');
     }
 
     async function saveTradeBill() {
