@@ -1,0 +1,61 @@
+A. Trade Bill
+This screen consists of multiple sections
+	1. Trade Info
+		a. Ticker
+		b. Current Market Price (CMP)
+		c. Entry Price
+		d. Stop Loss
+		e. Target
+		f. Quantity (fractional positions)
+		g. Upper Channel
+		h. Lower Channel
+		i. Target Pips
+		j. Stop Loss Pips
+	2. Trade Risk
+		a. Max Qty for Risk
+		b. Overnight charges
+		c. Risk per Share
+		d. Position Size
+		e. Risk %
+	3. Reward Information
+		a. Channel Height
+		b. Potential Gain
+		c. 1:1 C Target
+		d. 1:2 B Target
+		e. 1:3 A Target
+		f. Potential Gain
+		g. Risk (£)
+		h. Reward (£)
+		i. Risk Reward Ratio
+	4. After the Entry
+		a. Break Even
+		b. Trailing Stop
+	5. Actions (all checkboxes)
+		a. Filled 
+		b. Stop Entered
+		c. Target Entered
+		d. Journal Entered
+	6. Comments (textbox)
+	7. Save (store in database)
+
+B. Trade Bills
+	1. Shows the list of Trade Bills available in the database
+	2. Provide option to pick up the trade bill entry and populate in 
+
+C. Triple Screen Scanner
+	1. Screening should be done for all NASDAQ 100 stocks
+	2. A feature to pick the stock from the screener and create a Trade Bill. 
+
+D. Account Information
+	a. A/c Size
+	b. Risk % per Month
+	c. Risk % per Trade (if entered, Max Risk Amount should be calculated)
+	d. Max Risk Amount (if entered, Risk % per trade should be calculated)
+	e. Money Remaining to Risk
+	f. Risk % Remaining
+	g. Afford to loose (£)
+	h. No of Open Trades
+	i. Money locked in entire Position
+
+E. Settings
+	1. Save should be saved in database and should reflect in all screens.
