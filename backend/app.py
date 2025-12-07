@@ -1,7 +1,18 @@
 """
-Elder Trading System - Local Application
+Elder Trading System - Local Application v2
+Enhanced with connected workflow: Screener → Trade Bill → IBKR → Trade Log → Positions
+
 Run with: python app.py
-Access at: http://localhost:5000
+Access at: http://localhost:5001
+IBKR Gateway: https://localhost:5000
+
+Features v2:
+- Screen 1 as mandatory gate
+- New high-scoring rules (divergence, false breakout, kangaroo tail, etc.)
+- Elder Entry/Stop/Target calculations
+- IBKR order placement from Trade Bills
+- Auto-sync Trade Log from IBKR
+- Live position management with P/L tracking
 """
 
 import os
@@ -13,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from flask import Flask, render_template
 from models.database import Database, get_database
 from routes.api import api
+from routes.api_v2 import api_v2
 
 def create_app():
     """Create and configure the Flask application"""
@@ -30,13 +42,21 @@ def create_app():
     # Set environment variable for database module
     os.environ['DATABASE_PATH'] = db_path
     
-    # Register API blueprint
-    app.register_blueprint(api, url_prefix='/api')
+    # Register API blueprints
+    app.register_blueprint(api, url_prefix='/api')      # Original API
+    app.register_blueprint(api_v2, url_prefix='/api/v2') # Enhanced v2 API
     
     # Initialize database (creates tables and default data)
     with app.app_context():
         db = Database(db_path)
         app.config['DB'] = db
+        
+        # Run migrations for v2 features
+        try:
+            from models.migrate_v2 import migrate_database
+            migrate_database(db_path)
+        except Exception as e:
+            print(f"Migration note: {e}")
     
     # Serve frontend
     @app.route('/')
