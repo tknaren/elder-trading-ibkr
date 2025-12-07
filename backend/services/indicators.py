@@ -376,6 +376,10 @@ def calculate_all_indicators(highs: pd.Series, lows: pd.Series,
     macd_divergence = detect_divergence(closes, macd['histogram'])
     rsi_divergence = detect_divergence(closes, rsi)
     
+    # Get current and previous impulse colors for "BLUE after RED" detection
+    current_impulse = impulse['impulse_color'].iloc[-1]
+    prev_impulse = impulse['impulse_color'].iloc[-2] if len(impulse['impulse_color']) > 1 else 'BLUE'
+    
     # Get latest values
     latest = {
         'price': closes.iloc[-1],
@@ -391,7 +395,8 @@ def calculate_all_indicators(highs: pd.Series, lows: pd.Series,
         'stochastic_d': stochastic['stoch_d'].iloc[-1],
         'rsi': rsi.iloc[-1],
         'atr': atr.iloc[-1],
-        'impulse_color': impulse['impulse_color'].iloc[-1],
+        'impulse_color': current_impulse,
+        'prev_impulse_color': prev_impulse,  # NEW: for BLUE after RED detection
         'ema_slope': impulse['ema_slope'].iloc[-1],
         'macd_slope': impulse['macd_slope'].iloc[-1],
         'bullish_divergence_macd': macd_divergence['bullish'],
@@ -418,40 +423,58 @@ def calculate_all_indicators(highs: pd.Series, lows: pd.Series,
 GRADING_CRITERIA = """
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                    ELDER TRIPLE SCREEN - GRADING CRITERIA                     ║
+║                           (Revised Scoring System)                            ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                               ║
-║  SCREEN 1 (Weekly Trend) - Strategic Direction                                ║
+║  SCREEN 1 (Weekly Trend) - Strategic Direction [MANDATORY GATE]              ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
 ║  ✓ 22-Week EMA Slope: Rising = Bullish trend (look for longs)                ║
 ║  ✓ Weekly MACD-H: Rising = Bulls gaining strength                            ║
-║  ✗ Both falling = Bearish, STAY OUT (long-only strategy)                     ║
+║  ✗ Both EMA falling AND MACD-H falling = STAY OUT (bearish)                  ║
 ║                                                                               ║
 ║  SCREEN 2 (Daily Entry) - Tactical Timing                                     ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
 ║  ✓ Force Index (2-EMA) < 0: Pullback in uptrend = BUY ZONE                   ║
-║  ✓ Stochastic < 30: Oversold = Good entry                                    ║
+║  ✓ RSI < 20: Oversold = Strong entry | RSI 20-40: Neutral-Oversold           ║
 ║  ✓ Price near 22-EMA: Buying value, not chasing                              ║
-║  ✓ Impulse GREEN or BLUE-after-RED: Permission to buy                        ║
+║  ✓ Price near Lower Keltner Channel: Support zone                            ║
+║  ✓ Impulse RED or BLUE-after-RED: Permission to buy                          ║
+║  ✗ Impulse GREEN: DO NOT BUY (wait for pullback)                             ║
 ║                                                                               ║
-║  SIGNAL STRENGTH SCORING (0-10)                                               ║
+║  SCREEN 3 (Entry Technique) - Execution                                       ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
-║  +2 │ Weekly EMA rising strongly                                             ║
+║  • Entry: Buy-stop above previous day's high (confirms strength)             ║
+║  • Stop Loss: 2 × ATR below entry, or below recent swing low                 ║
+║  • Target: Upper Keltner Channel, or 1:2 / 1:3 Risk-Reward                   ║
+║                                                                               ║
+║  SIGNAL STRENGTH SCORING (0-15+)                                              ║
+║  ─────────────────────────────────────────────────────────────────────────── ║
+║  +2 │ Weekly EMA rising strongly (STRONG_BULLISH)                            ║
 ║  +1 │ Weekly MACD-H rising                                                   ║
-║  +2 │ Force Index < 0 (pullback)                                             ║
-║  +1 │ Force Index uptick from negative                                       ║
-║  +2 │ Stochastic < 30 (oversold)                                             ║
-║  +1 │ Stochastic 30-50                                                       ║
+║  +2 │ Force Index < 0 (pullback zone)                                        ║
+║  +2 │ RSI < 20 (oversold)                                                    ║
+║  +1 │ RSI 20-40 (neutral to oversold)                                        ║
 ║  +1 │ Price at or below 22-EMA (value zone)                                  ║
-║  +2 │ Bullish divergence (MACD or RSI)                                       ║
-║  +1 │ Impulse GREEN                                                          ║
-║  -2 │ Impulse RED (disqualifies trade)                                       ║
+║  +1 │ Bullish divergence (MACD or RSI)                                       ║
+║  +1 │ Impulse RED (permission to buy)                                        ║
+║  +2 │ Impulse BLUE after RED (strong transition signal)                      ║
+║  +2 │ Price near lower Keltner Channel                                       ║
+║  +2 │ False downside breakout                                                ║
+║  +2 │ Strong bullish pattern (Engulfing, Tweezer, Three Candle Swing)        ║
+║  +1 │ Other bullish candlestick pattern                                      ║
 ║                                                                               ║
 ║  GRADES                                                                       ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
-║  ⭐ A-TRADE: Signal Strength ≥ 5 AND Impulse not RED                         ║
-║  📊 B-TRADE: Signal Strength 3-4 AND Impulse GREEN/BLUE                      ║
-║  👀 WATCH:   Signal Strength 1-2 (developing setup)                          ║
-║  🔴 AVOID:   Signal Strength ≤ 0 OR Impulse RED                              ║
+║  ⭐ A-TRADE: Signal Strength ≥ 7                                              ║
+║             → TRADE: High probability setup, place order                     ║
+║  📊 B-TRADE: Signal Strength 5-6                                              ║
+║             → PREPARE: Good setup developing, set alerts                     ║
+║  👀 C-WATCH: Signal Strength 1-4                                              ║
+║             → WATCH: Early stage, monitor for improvement                    ║
+║  🔴 AVOID:   Signal Strength ≤ 0 OR Impulse GREEN                             ║
+║             → NO TRADE: Wait for pullback or conditions to improve           ║
+║                                                                               ║
+║  KEY RULE: GREEN = Already rallying, wait for RED/BLUE pullback to buy       ║
 ║                                                                               ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """

@@ -340,37 +340,47 @@ def calculate_elder_trade_levels(hist: pd.DataFrame, indicators: Dict) -> Dict:
 
 def calculate_signal_strength_v2(indicators: Dict, weekly: Dict, hist: pd.DataFrame, patterns: list = None) -> Dict:
     """
-    Calculate signal strength score based on Elder criteria - V2 with FIXES
+    Calculate signal strength score based on REVISED Elder criteria
     
-    CRITICAL FIX #1: Screen 1 is a MANDATORY GATE
-    - If weekly_bullish is False, return AVOID immediately
+    SCREEN 1 (Weekly) - MANDATORY GATE:
+    - If EMA falling AND MACD-H falling = STAY OUT (bearish)
     
-    CRITICAL FIX #2: Impulse RED blocks trades entirely
-    - Not just a penalty, but a disqualifier
+    SCREEN 2 (Daily) - Entry Timing:
+    - Force Index (2-EMA) < 0: Pullback in uptrend = BUY ZONE
+    - RSI < 20: Oversold = Good entry opportunity (was Stochastic < 30)
+    - RSI 20-40: Neutral to oversold
+    - Price near 22-EMA: Buying value, not chasing
+    - Impulse System: RED or BLUE after RED = Permission to buy; GREEN = DO NOT BUY
+    - Price near Lower Keltner Channel
+    - False downside breakout
+    - Bullish patterns: Engulfing, Tweezer Bottom, Three Candle Swing
     
-    NEW HIGH-SCORING RULES:
-    +3: Price near lower channel (short-term oversold)
-    +3: MACD divergence (strongest signal)
-    +3: False downside breakout
-    +2: Kangaroo tail pattern
-    +2: Force Index down spike
-    +3: Pullback to value (Weekly EMA↑, Daily EMA↑, price < fast EMA)
-    
-    Standard Scoring:
-    +2: Weekly EMA rising strongly
+    SCORING (0-10+):
+    +2: Weekly EMA rising strongly (STRONG_BULLISH)
     +1: Weekly MACD-H rising
-    +2: Force Index < 0 (pullback)
-    +2: Stochastic < 30 (oversold) - FIXED from 50
-    +1: Stochastic 30-50
-    +1: Price at/below 22-EMA
-    +1: Impulse GREEN
-    +1/+2: Bullish candlestick patterns
+    +2: Force Index < 0 (pullback zone)
+    +2: RSI < 20 (oversold)
+    +1: RSI 20-40 (neutral to oversold)
+    +1: Price at or below 22-EMA (value zone)
+    +1: Bullish divergence (MACD or RSI)
+    +1: Impulse RED (permission to buy)
+    +2: Impulse BLUE after RED (stronger signal)
+    +1/+2: Bullish candlestick pattern (+2 for high reliability)
+    +2: Price near lower Keltner Channel
+    +2: False downside breakout
+    
+    GRADES:
+    ⭐ A: Score ≥ 7 → TRADE
+    📊 B: Score 5-6 → PREPARE
+    👀 C: Score 1-4 → WATCH
+    🔴 AVOID: Score ≤ 0 OR Impulse GREEN
     """
     if patterns is None:
         patterns = []
 
     # ═══════════════════════════════════════════════════════════════
-    # CRITICAL FIX #1: Screen 1 MANDATORY GATE
+    # SCREEN 1 MANDATORY GATE: Weekly Trend Check
+    # Key Rule: If both EMA falling AND MACD-H falling = STAY OUT
     # ═══════════════════════════════════════════════════════════════
     if not weekly.get('weekly_bullish', False):
         return {
@@ -378,38 +388,42 @@ def calculate_signal_strength_v2(indicators: Dict, weekly: Dict, hist: pd.DataFr
             'grade': 'AVOID',
             'action': '⛔ STAY OUT - Weekly trend not bullish (Screen 1 FAILED)',
             'is_a_trade': False,
-            'breakdown': ['❌ Screen 1 FAILED: Weekly trend must be BULLISH for long trades'],
-            'signals': ['⛔ Weekly trend is bearish or neutral - NO LONGS ALLOWED'],
+            'breakdown': ['❌ Screen 1 FAILED: EMA falling AND/OR MACD-H falling'],
+            'signals': ['⛔ Weekly trend is bearish - NO LONGS ALLOWED'],
             'high_value_signals': []
         }
 
     # ═══════════════════════════════════════════════════════════════
-    # CRITICAL FIX #2: Impulse RED blocks trades
+    # IMPULSE SYSTEM CHECK - REVISED LOGIC
+    # GREEN = DO NOT BUY (Bulls already in control, wait for pullback)
+    # RED or BLUE after RED = Permission to buy
     # ═══════════════════════════════════════════════════════════════
     impulse = indicators.get('impulse_color', 'BLUE')
-    if impulse == 'RED':
+    prev_impulse = indicators.get('prev_impulse_color', 'BLUE')
+    
+    if impulse == 'GREEN':
         return {
             'signal_strength': 0,
             'grade': 'AVOID',
-            'action': '⛔ NO BUYING - Impulse RED (Bears in control)',
+            'action': '⛔ NO BUYING - Impulse GREEN (Wait for pullback)',
             'is_a_trade': False,
-            'breakdown': ['❌ Impulse RED: Bears in control - DO NOT BUY'],
-            'signals': ['⛔ Impulse System forbids buying when RED'],
+            'breakdown': ['❌ Impulse GREEN: Bulls in control but NOT a buy zone - wait for RED/BLUE pullback'],
+            'signals': ['⛔ GREEN = Already rallying, wait for pullback to RED or BLUE'],
             'high_value_signals': []
         }
 
     score = 0
     signals = []
     breakdown = []
-    high_value_signals = []  # Track the most valuable setups
+    high_value_signals = []
 
     # ═══════════════════════════════════════════════════════════════
-    # WEEKLY TREND SCORING (Screen 1 already passed)
+    # SCREEN 1: WEEKLY TREND SCORING
     # ═══════════════════════════════════════════════════════════════
     if weekly.get('weekly_ema_slope') == 'RISING':
         if weekly.get('weekly_trend') == 'STRONG_BULLISH':
             score += 2
-            breakdown.append('+2: Weekly EMA strongly rising')
+            breakdown.append('+2: Weekly EMA strongly rising (STRONG_BULLISH)')
             signals.append('✅ Weekly uptrend confirmed')
         else:
             score += 1
@@ -421,90 +435,31 @@ def calculate_signal_strength_v2(indicators: Dict, weekly: Dict, hist: pd.DataFr
         signals.append('✅ Weekly momentum bullish')
 
     # ═══════════════════════════════════════════════════════════════
-    # NEW HIGH-VALUE SIGNALS (+3 points each)
+    # SCREEN 2: DAILY OSCILLATORS & ENTRY TIMING
     # ═══════════════════════════════════════════════════════════════
     
-    # 1. MACD Divergence - "Strongest signal in technical analysis" - Elder
-    if indicators.get('bullish_divergence_macd') or indicators.get('bullish_divergence_rsi'):
-        score += 3
-        breakdown.append('+3: ⭐ MACD/RSI Bullish Divergence (STRONGEST SIGNAL)')
-        signals.append('⭐⭐⭐ MACD Divergence = Most powerful buy signal')
-        high_value_signals.append('MACD_DIVERGENCE')
-
-    # 2. Short-term Oversold (near lower channel)
-    price = indicators.get('price', 0)
-    kc_lower = indicators.get('kc_lower', price * 0.97)
-    kc_upper = indicators.get('kc_upper', price * 1.03)
-    channel_height = kc_upper - kc_lower
-    
-    if channel_height > 0:
-        position_in_channel = (price - kc_lower) / channel_height
-        if position_in_channel < 0.2:  # Near lower band
-            score += 3
-            breakdown.append(f'+3: ⭐ Price near lower channel ({position_in_channel:.0%})')
-            signals.append('⭐⭐⭐ Short-term oversold at support')
-            high_value_signals.append('LOWER_CHANNEL')
-
-    # 3. False Downside Breakout
-    false_breakout = detect_false_breakout(hist)
-    if false_breakout['detected']:
-        score += false_breakout['strength']
-        breakdown.append(f'+{false_breakout["strength"]}: ⭐ False Downside Breakout detected')
-        signals.append('⭐⭐⭐ False breakout = Strong reversal signal')
-        high_value_signals.append('FALSE_BREAKOUT')
-
-    # 4. Pullback to Value (Weekly EMA↑, Daily EMA↑, price < fast EMA)
-    daily_ema_rising = indicators.get('ema_slope', 0) > 0
-    price_below_fast_ema = price < indicators.get('ema_13', price)
-    
-    if weekly.get('weekly_ema_slope') == 'RISING' and daily_ema_rising and price_below_fast_ema:
-        score += 3
-        breakdown.append('+3: ⭐ Pullback to Value (Both EMAs rising, price dipped)')
-        signals.append('⭐⭐⭐ Perfect pullback setup in uptrend')
-        high_value_signals.append('PULLBACK_TO_VALUE')
-
-    # ═══════════════════════════════════════════════════════════════
-    # HIGH-VALUE SIGNALS (+2 points each)
-    # ═══════════════════════════════════════════════════════════════
-    
-    # 5. Kangaroo Tail
-    kangaroo = detect_kangaroo_tail(hist)
-    if kangaroo['detected']:
-        score += kangaroo['strength']
-        breakdown.append(f'+{kangaroo["strength"]}: Kangaroo Tail (reversal pattern)')
-        signals.append('⭐⭐ Kangaroo tail = Bullish reversal')
-        high_value_signals.append('KANGAROO_TAIL')
-
-    # 6. Force Index Down Spike
-    fi_spike = detect_force_index_spike(indicators, hist)
-    if fi_spike['detected']:
-        score += fi_spike['strength']
-        breakdown.append(f'+{fi_spike["strength"]}: Force Index Spike (selling climax)')
-        signals.append('⭐⭐ Force Index spike = Capitulation')
-        high_value_signals.append('FI_SPIKE')
-
-    # ═══════════════════════════════════════════════════════════════
-    # STANDARD ELDER SCORING
-    # ═══════════════════════════════════════════════════════════════
-    
-    # Force Index scoring
+    # Force Index scoring (+2)
     force_index = indicators.get('force_index_2', 0)
     if force_index < 0:
         score += 2
         breakdown.append(f'+2: Force Index < 0 ({force_index:.0f}) - Pullback zone')
         signals.append('✅ Force Index negative = buying opportunity')
+        high_value_signals.append('FORCE_INDEX_PULLBACK')
 
-    # Stochastic scoring - FIXED: threshold now 30, not 50
-    stochastic = indicators.get('stochastic_k', 50)
-    if stochastic < 30:
+    # RSI scoring (replacing Stochastic)
+    rsi = indicators.get('rsi', 50)
+    if rsi < 20:
         score += 2
-        breakdown.append(f'+2: Stochastic < 30 ({stochastic:.1f}) - OVERSOLD')
-        signals.append('✅ Stochastic oversold = entry zone')
-    elif stochastic < 50:
+        breakdown.append(f'+2: RSI < 20 ({rsi:.1f}) - OVERSOLD')
+        signals.append('✅ RSI oversold = strong entry zone')
+        high_value_signals.append('RSI_OVERSOLD')
+    elif rsi < 40:
         score += 1
-        breakdown.append(f'+1: Stochastic 30-50 ({stochastic:.1f})')
+        breakdown.append(f'+1: RSI 20-40 ({rsi:.1f}) - Neutral to oversold')
+        signals.append('✅ RSI in buy zone')
 
-    # Price vs EMA scoring
+    # Price vs EMA scoring (+1)
+    price = indicators.get('price', 0)
     price_vs_ema = indicators.get('price_vs_ema', 0)
     if price_vs_ema <= 0:
         score += 1
@@ -514,48 +469,96 @@ def calculate_signal_strength_v2(indicators: Dict, weekly: Dict, hist: pd.DataFr
         breakdown.append(f'+0: Price far above EMA ({price_vs_ema:.1f}%) - Overpaying')
         signals.append('⚠️ Price extended above EMA')
 
-    # Impulse system scoring
-    if impulse == 'GREEN':
+    # Bullish Divergence (+1)
+    if indicators.get('bullish_divergence_macd') or indicators.get('bullish_divergence_rsi'):
         score += 1
-        breakdown.append('+1: Impulse GREEN - Bulls in control')
-        signals.append('✅ Impulse permits buying')
-    else:  # BLUE
-        breakdown.append('+0: Impulse BLUE - Neutral')
-        signals.append('⚠️ Impulse neutral - proceed with caution')
+        breakdown.append('+1: Bullish Divergence (MACD or RSI)')
+        signals.append('⭐ Bullish divergence detected')
+        high_value_signals.append('DIVERGENCE')
 
-    # Candlestick pattern bonus
+    # Impulse System scoring (RED = +1, BLUE after RED = +2)
+    if impulse == 'RED':
+        score += 1
+        breakdown.append('+1: Impulse RED - Bears retreating, permission to buy')
+        signals.append('✅ Impulse RED = Buy zone (pullback in progress)')
+        high_value_signals.append('IMPULSE_RED')
+    elif impulse == 'BLUE':
+        if prev_impulse == 'RED':
+            score += 2
+            breakdown.append('+2: Impulse BLUE after RED - Strong buy signal')
+            signals.append('⭐⭐ BLUE after RED = Transition, excellent entry')
+            high_value_signals.append('IMPULSE_BLUE_AFTER_RED')
+        else:
+            breakdown.append('+0: Impulse BLUE - Neutral')
+            signals.append('⚠️ Impulse neutral - caution')
+
+    # Price near Lower Keltner Channel (+2)
+    kc_lower = indicators.get('kc_lower', price * 0.97)
+    kc_upper = indicators.get('kc_upper', price * 1.03)
+    channel_height = kc_upper - kc_lower
+    
+    if channel_height > 0:
+        position_in_channel = (price - kc_lower) / channel_height
+        if position_in_channel < 0.25:  # Near lower band (bottom 25%)
+            score += 2
+            breakdown.append(f'+2: Price near lower KC ({position_in_channel:.0%} of channel)')
+            signals.append('⭐⭐ Near lower Keltner Channel = Support zone')
+            high_value_signals.append('LOWER_CHANNEL')
+
+    # False Downside Breakout (+2)
+    false_breakout = detect_false_breakout(hist)
+    if false_breakout['detected']:
+        score += 2
+        breakdown.append('+2: False Downside Breakout detected')
+        signals.append('⭐⭐ False breakout = Strong reversal signal')
+        high_value_signals.append('FALSE_BREAKOUT')
+
+    # ═══════════════════════════════════════════════════════════════
+    # CANDLESTICK PATTERNS - Specific patterns for Screen 2
+    # Priority: Bullish Engulfing, Tweezer Bottom, Three Candle Swing
+    # ═══════════════════════════════════════════════════════════════
+    priority_patterns = ['bullish_engulfing', 'tweezer_bottom', 'three_candle_swing', 
+                        'morning_star', 'piercing_line', 'hammer']
+    
     bullish_patterns = [p for p in patterns if 'bullish' in p.get('type', '')]
     if bullish_patterns:
         pattern_names = [p['name'] for p in bullish_patterns]
+        pattern_ids = [p.get('id', '').lower() for p in bullish_patterns]
+        
+        # Check for priority patterns
+        has_priority = any(pid in pattern_ids for pid in priority_patterns)
         best_reliability = max(p.get('reliability', 1) for p in bullish_patterns)
-        if best_reliability >= 4:
+        
+        if has_priority or best_reliability >= 4:
             score += 2
             breakdown.append(f'+2: Strong bullish pattern ({", ".join(pattern_names[:2])})')
+            high_value_signals.append('STRONG_CANDLESTICK')
         else:
             score += 1
             breakdown.append(f'+1: Bullish pattern ({", ".join(pattern_names[:2])})')
-        signals.append(f'✅ Candlestick: {", ".join(pattern_names[:2])}')
+        signals.append(f'🕯️ Candlestick: {", ".join(pattern_names[:2])}')
 
     # ═══════════════════════════════════════════════════════════════
-    # GRADE DETERMINATION - FIXED: includes weekly_bullish check
+    # GRADE DETERMINATION - REVISED THRESHOLDS
+    # A: ≥7, B: 5-6, C: 1-4, AVOID: ≤0 or GREEN
     # ═══════════════════════════════════════════════════════════════
-    if score >= 5:
+    if score >= 7:
         grade = 'A'
-        action = '⭐ TRADE: High probability setup - Place order'
-    elif score >= 3:
+        action = '⭐ TRADE: High probability setup - Calculate position size and place order'
+    elif score >= 5:
         grade = 'B'
-        action = '📊 PREPARE: Good setup developing - Set alerts'
+        action = '📊 PREPARE: Good setup developing - Set alerts, prepare trade plan'
     elif score >= 1:
         grade = 'C'
-        action = '👀 WATCH: Early stage - Monitor for improvement'
+        action = '👀 WATCH: Early stage - Monitor for improving conditions'
     else:
         grade = 'AVOID'
         action = '🔴 AVOID: Conditions unfavorable'
 
-    # CRITICAL FIX #3: is_a_trade includes weekly_bullish
+    # is_a_trade: Grade A AND weekly bullish AND impulse not GREEN
     is_a_trade = (
         grade == 'A' and 
-        impulse != 'RED' and 
+        impulse != 'GREEN' and 
         weekly.get('weekly_bullish', False)
     )
 
@@ -635,6 +638,7 @@ def scan_stock_v2(symbol: str, config: Dict = None) -> Optional[Dict]:
         'rsi': round(float(indicators['rsi']), 1),
         'atr': round(float(indicators['atr']), 2),
         'impulse_color': indicators['impulse_color'],
+        'prev_impulse_color': indicators.get('prev_impulse_color', 'BLUE'),  # For BLUE after RED detection
         'price_vs_ema': round(float(indicators['price_vs_ema']), 1),
         'channel_width': round(float(indicators['channel_width']), 1),
 
@@ -737,10 +741,13 @@ def run_weekly_screen_v2(market: str = 'US', symbols: List[str] = None) -> Dict:
 
 def run_daily_screen_v2(weekly_results: List[Dict]) -> Dict:
     """
-    Run daily screen with CORRECTED logic
+    Run daily screen with REVISED logic
     
-    FIXED: daily_ready now uses proper AND/OR:
-    - screen1_passed AND impulse_ok AND (force_index < 0 OR stochastic < 30)
+    REVISED Impulse Rules:
+    - GREEN = DO NOT BUY (wait for pullback)
+    - RED or BLUE = Permission to buy
+    
+    daily_ready = screen1_passed AND impulse_not_green AND (force_index < 0 OR rsi < 40)
     """
     if not weekly_results:
         return {
@@ -754,15 +761,19 @@ def run_daily_screen_v2(weekly_results: List[Dict]) -> Dict:
     for symbol in symbols:
         analysis = scan_stock_v2(symbol)
         if analysis:
-            # FIXED: Correct Elder Triple Screen logic
+            # REVISED: Correct Elder Triple Screen logic
             screen1_passed = analysis['weekly_bullish']
-            impulse_ok = analysis['impulse_color'] != 'RED'
+            
+            # NEW: GREEN = DO NOT BUY, RED/BLUE = OK to buy
+            impulse_ok = analysis['impulse_color'] != 'GREEN'
+            
+            # Use RSI instead of Stochastic
             pullback_signal = (
                 analysis['force_index'] < 0 or 
-                analysis['stochastic'] < 30  # FIXED: was 50
+                analysis['rsi'] < 40  # RSI < 40 for pullback zone
             )
             
-            # FIXED: Proper AND/OR logic
+            # REVISED: Proper logic
             daily_ready = screen1_passed and impulse_ok and pullback_signal
             
             analysis['daily_ready'] = daily_ready
@@ -780,5 +791,5 @@ def run_daily_screen_v2(weekly_results: List[Dict]) -> Dict:
         'daily_ready_count': len([r for r in results if r.get('daily_ready')]),
         'a_trades': a_trades,
         'all_results': results,
-        'screener_version': '2.0'
+        'screener_version': '2.1'  # Updated version
     })
