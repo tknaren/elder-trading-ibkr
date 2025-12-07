@@ -232,6 +232,45 @@ class Database:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
+            
+            -- Trade Log (detailed journal matching Excel)
+            CREATE TABLE IF NOT EXISTS trade_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                entry_date TEXT,
+                symbol TEXT NOT NULL,
+                strategy TEXT,
+                direction TEXT DEFAULT 'Long',
+                entry_price REAL,
+                shares INTEGER,
+                stop_loss REAL,
+                take_profit REAL,
+                exit_date TEXT,
+                exit_price REAL,
+                trade_costs REAL DEFAULT 0,
+                gross_pnl REAL,
+                net_pnl REAL,
+                planned_rrr REAL,
+                actual_rrr REAL,
+                r_value REAL,
+                account_change_pct REAL,
+                mistake TEXT,
+                discipline_rating INTEGER DEFAULT 8,
+                notes TEXT,
+                status TEXT DEFAULT 'open',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            
+            -- Indicator Filters Config
+            CREATE TABLE IF NOT EXISTS indicator_filters (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                config JSON NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
         ''')
         conn.commit()
         conn.close()

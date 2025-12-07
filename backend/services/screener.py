@@ -156,6 +156,17 @@ def calculate_signal_strength(indicators: Dict, weekly: Dict, patterns: list = N
     if patterns is None:
         patterns = []
 
+    # CRITICAL: Screen 1 must pass for long trades
+    if not weekly.get('weekly_bullish', False):
+        return {
+            'signal_strength': 0,
+            'grade': 'AVOID',
+            'action': 'STAY OUT - Weekly trend not bullish',
+            'is_a_trade': False,
+            'breakdown': ['Screen 1 FAILED: Weekly trend not bullish'],
+            'signals': ['⛔ Weekly trend must be bullish for longs']
+        }
+
     score = 0
     signals = []
     breakdown = []
@@ -262,7 +273,11 @@ def calculate_signal_strength(indicators: Dict, weekly: Dict, patterns: list = N
         'signal_strength': score,
         'grade': grade,
         'action': action,
-        'is_a_trade': grade == 'A' and impulse != 'RED',
+        'is_a_trade': (
+            grade == 'A' and
+            impulse != 'RED' and
+            weekly.get('weekly_bullish', False)
+        ),
         'breakdown': breakdown,
         'signals': signals
     }
@@ -510,13 +525,19 @@ def run_daily_screen(weekly_results: List[Dict]) -> Dict:
     for symbol in symbols:
         analysis = scan_stock(symbol)
         if analysis:
-            # Re-check daily conditions
-            daily_ready = (
+            # Correct Elder Triple Screen logic
+            screen1_passed = analysis['weekly_bullish']
+            impulse_ok = analysis['impulse_color'] != 'RED'
+            pullback_signal = (
                 analysis['force_index'] < 0 or
-                analysis['stochastic'] < 50 or
-                analysis['impulse_color'] != 'RED'
+                analysis['stochastic'] < 30
             )
+
+            daily_ready = screen1_passed and impulse_ok and pullback_signal
             analysis['daily_ready'] = daily_ready
+            analysis['screen1_passed'] = screen1_passed
+            analysis['impulse_ok'] = impulse_ok
+            analysis['pullback_signal'] = pullback_signal
             results.append(analysis)
 
     # Sort by signal strength

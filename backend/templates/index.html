@@ -57,8 +57,12 @@
         {id:'screener', icon:'🔍', label:'Screener'},
         {id:'trade-bill', icon:'💼', label:'Trade Bill'},
         {id:'trade-bills', icon:'📋', label:'Trade Bills'},
+        {id:'journal-dashboard', icon:'📊', label:'Dashboard'},
+        {id:'trade-log', icon:'📝', label:'Trade Log'},
+        {id:'trade-summary', icon:'📈', label:'Trade Summary'},
+        {id:'pnl-tracker', icon:'💵', label:'P&L Tracker'},
+        {id:'mistakes', icon:'⚠️', label:'Mistakes'},
         {id:'account', icon:'💰', label:'Account'},
-        {id:'journal', icon:'📖', label:'Journal'},
         {id:'checklist', icon:'✅', label:'Checklist'},
         {id:'settings', icon:'⚙️', label:'Settings'}
     ];
@@ -76,6 +80,40 @@
         document.getElementById('toast').appendChild(el);
         setTimeout(() => el.remove(), 3000);
     }
+
+    // Export trades to CSV
+    async function exportTrades() {
+        try {
+            const response = await api('GET', '/trade-log');
+            const trades = response.trades || [];
+            if (trades.length === 0) {
+                toast('No trades to export', 'error');
+                return;
+            }
+            
+            const headers = ['Date', 'Symbol', 'Strategy', 'Direction', 'Entry', 'Shares', 'Stop Loss', 'Take Profit', 'Exit Date', 'Exit Price', 'Gross P&L', 'Net P&L', 'Mistake', 'Notes'];
+            const rows = trades.map(t => [
+                t.entry_date, t.symbol, t.strategy, t.direction, t.entry_price, t.shares,
+                t.stop_loss, t.take_profit, t.exit_date, t.exit_price, t.gross_pnl, t.net_pnl, t.mistake, t.notes
+            ]);
+            
+            const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v || ''}"`).join(','))].join('\n');
+            const blob = new Blob([csv], {type: 'text/csv'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `trade_log_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            toast('Trades exported!', 'success');
+        } catch(e) {
+            toast('Export error: ' + e.message, 'error');
+        }
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadIndicatorFilters();
+    });
 
     function renderNav() {
         document.getElementById('nav').innerHTML = tabs.map(t => `
@@ -101,13 +139,19 @@
         if(currentTab==='screener') c.innerHTML = screenView();
         else if(currentTab==='trade-bill') { c.innerHTML = tradeBillView(); triggerTradeBillCalc(); }
         else if(currentTab==='trade-bills') c.innerHTML = await tradeBillsView();
+        else if(currentTab==='journal-dashboard') c.innerHTML = await journalDashboardView();
+        else if(currentTab==='trade-log') c.innerHTML = await tradeLogView();
+        else if(currentTab==='trade-summary') c.innerHTML = await tradeSummaryView();
+        else if(currentTab==='pnl-tracker') c.innerHTML = await pnlTrackerView();
+        else if(currentTab==='mistakes') c.innerHTML = await mistakesView();
         else if(currentTab==='account') c.innerHTML = await accountView();
-        else if(currentTab==='journal') c.innerHTML = journalView();
         else if(currentTab==='checklist') c.innerHTML = checklistView();
         else if(currentTab==='settings') c.innerHTML = settingsView();
     }
 
     // ========== SCREENER ==========
+    let indicatorFilters = null; // Will hold user's indicator config
+    
     function screenView() {
         const results = weeklyData?.all_results || [];
         const sum = weeklyData?.summary || {};
@@ -117,6 +161,7 @@
                 <div class="flex items-center justify-between">
                     <div><h2 class="text-xl font-bold">Triple Screen Scanner</h2><p class="text-gray-500 text-sm">Weekly trend + Daily entry timing</p></div>
                     <div class="flex gap-2">
+                        <button onclick="showIndicatorFilterModal()" class="px-3 py-2 bg-purple-600/30 border border-purple-500 rounded-lg hover:bg-purple-600/50" title="Configure Indicators">⚙️ Filters</button>
                         <button onclick="runWeekly()" class="px-4 py-2 bg-blue-600 rounded-lg font-medium hover:bg-blue-700">🔍 Run Weekly Scan</button>
                         <button onclick="showCriteriaModal()" class="px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600" title="How grading works">❓</button>
                     </div>
@@ -376,6 +421,154 @@
             }
         } catch(e) {
             toast('Error adding to watchlist: ' + e.message, 'error');
+        }
+    }
+
+    // ========== INDICATOR FILTER CONFIGURATION ==========
+    const INDICATOR_CATALOG = {
+        TREND: {
+            description: 'Trend Direction Indicators',
+            indicators: {
+                'ema_22': { name: 'EMA 22 Slope', description: 'Weekly EMA direction', recommended: true },
+                'ema_13': { name: 'EMA 13 Slope', description: 'Faster EMA for shorter swings' },
+                'sma_50': { name: 'SMA 50 Slope', description: '50-day moving average' },
+                'sma_200': { name: 'SMA 200 Slope', description: 'Long-term trend' },
+                'adx': { name: 'ADX', description: 'Trend strength (not direction)' }
+            }
+        },
+        MOMENTUM: {
+            description: 'Momentum Indicators',
+            indicators: {
+                'macd_histogram': { name: 'MACD Histogram', description: 'Trend momentum', recommended: true },
+                'macd_signal': { name: 'MACD Signal Line', description: 'MACD crossovers' },
+                'roc': { name: 'Rate of Change', description: 'Price momentum' },
+                'momentum': { name: 'Momentum', description: '10-period momentum' }
+            }
+        },
+        OSCILLATOR: {
+            description: 'Oscillator Indicators',
+            indicators: {
+                'force_index': { name: 'Force Index (2 EMA)', description: 'Volume-weighted momentum', recommended: true },
+                'stochastic': { name: 'Stochastic %K', description: 'Overbought/oversold', recommended: true },
+                'rsi': { name: 'RSI (14)', description: 'Relative strength' },
+                'williams_r': { name: 'Williams %R', description: 'Similar to stochastic' },
+                'cci': { name: 'CCI', description: 'Commodity Channel Index' }
+            }
+        },
+        VOLUME: {
+            description: 'Volume Indicators',
+            indicators: {
+                'volume_ratio': { name: 'Volume Ratio', description: 'Current vs average volume' },
+                'obv': { name: 'OBV Trend', description: 'On-Balance Volume' },
+                'mfi': { name: 'MFI', description: 'Money Flow Index' }
+            }
+        },
+        VOLATILITY: {
+            description: 'Volatility Indicators',
+            indicators: {
+                'atr': { name: 'ATR', description: 'Average True Range' },
+                'bollinger_position': { name: 'Bollinger Position', description: 'Price within bands' },
+                'keltner_position': { name: 'Keltner Position', description: 'Price within channels' }
+            }
+        },
+        IMPULSE: {
+            description: 'Impulse System',
+            indicators: {
+                'impulse': { name: 'Elder Impulse', description: 'EMA + MACD-H combined', recommended: true }
+            }
+        }
+    };
+    
+    const DEFAULT_FILTERS = {
+        TREND: ['ema_22'],
+        MOMENTUM: ['macd_histogram'],
+        OSCILLATOR: ['force_index', 'stochastic'],
+        VOLUME: ['volume_ratio'],
+        VOLATILITY: [],
+        IMPULSE: ['impulse']
+    };
+    
+    async function loadIndicatorFilters() {
+        try {
+            indicatorFilters = await api('GET', '/indicator-filters');
+        } catch(e) {
+            indicatorFilters = JSON.parse(JSON.stringify(DEFAULT_FILTERS));
+        }
+        if (!indicatorFilters || Object.keys(indicatorFilters).length === 0) {
+            indicatorFilters = JSON.parse(JSON.stringify(DEFAULT_FILTERS));
+        }
+    }
+    
+    async function showIndicatorFilterModal() {
+        if (!indicatorFilters) await loadIndicatorFilters();
+        
+        document.getElementById('modal').classList.remove('hidden');
+        document.getElementById('modal-body').innerHTML = `
+            <div class="p-6 max-w-4xl">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold">⚙️ Indicator Filters</h2>
+                        <p class="text-gray-500">Configure which indicators to use in the screener</p>
+                    </div>
+                    <button onclick="closeModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto">
+                    ${Object.entries(INDICATOR_CATALOG).map(([category, data]) => `
+                        <div class="bg-[#1f2937] rounded-lg p-4">
+                            <h3 class="font-bold text-sm text-blue-400 mb-3">${category}: ${data.description}</h3>
+                            <div class="space-y-2">
+                                ${Object.entries(data.indicators).map(([id, ind]) => {
+                                    const isActive = (indicatorFilters[category] || []).includes(id);
+                                    return `
+                                        <label class="flex items-center gap-2 cursor-pointer hover:bg-[#111827] p-1 rounded">
+                                            <input type="checkbox" id="ind-${id}" ${isActive ? 'checked' : ''} 
+                                                onchange="toggleIndicator('${category}', '${id}')"
+                                                class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500">
+                                            <span class="flex-1">
+                                                <span class="text-sm ${ind.recommended ? 'text-green-400' : ''}">${ind.name}</span>
+                                                ${ind.recommended ? '<span class="text-xs text-green-500 ml-1">★ Elder</span>' : ''}
+                                                <span class="text-xs text-gray-500 block">${ind.description}</span>
+                                            </span>
+                                        </label>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="flex gap-2 mt-6">
+                    <button onclick="resetIndicatorFilters()" class="px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600">↺ Reset to Elder Defaults</button>
+                    <button onclick="saveIndicatorFilters()" class="flex-1 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700">💾 Save Configuration</button>
+                </div>
+            </div>
+        `;
+    }
+    
+    function toggleIndicator(category, id) {
+        if (!indicatorFilters[category]) indicatorFilters[category] = [];
+        const idx = indicatorFilters[category].indexOf(id);
+        if (idx >= 0) {
+            indicatorFilters[category].splice(idx, 1);
+        } else {
+            indicatorFilters[category].push(id);
+        }
+    }
+    
+    function resetIndicatorFilters() {
+        indicatorFilters = JSON.parse(JSON.stringify(DEFAULT_FILTERS));
+        showIndicatorFilterModal(); // Re-render
+        toast('Reset to Elder defaults', 'success');
+    }
+    
+    async function saveIndicatorFilters() {
+        try {
+            await api('POST', '/indicator-filters', indicatorFilters);
+            toast('Indicator filters saved!', 'success');
+            closeModal();
+        } catch(e) {
+            toast('Error saving filters: ' + e.message, 'error');
         }
     }
 
@@ -750,7 +943,7 @@
         
         // R:R Ratio = Reward / Risk
         const rewardRatio = risk > 0 && reward > 0 ? Math.round((reward / risk) * 100) / 100 : 0;
-        const riskRewardRatio = rewardRatio > 0 ? `1:${rewardRatio}` : '';
+        const riskRewardRatio = rewardRatio > 0 ? `1:${rewardRatio.toFixed(2)}` : '1:0';
         
         // Break Even = Entry (or Entry + overnight charges per share)
         const breakEven = quantity > 0 && overnightCharges > 0 ? Math.round((entry + (overnightCharges / quantity)) * 100) / 100 : entry;
@@ -1049,13 +1242,540 @@
         }
     }
 
-    // ========== JOURNAL ==========
-    function journalView() {
-        return `<div class="text-center py-20 text-gray-500">
-            <div class="text-6xl mb-4">📖</div>
-            <h3 class="text-xl">Trade Journal</h3>
-            <p class="mt-2">Coming soon - record and track your trades</p>
-        </div>`;
+    // ========== JOURNAL DASHBOARD ==========
+    async function journalDashboardView() {
+        try {
+            const trades = await api('GET', '/trade-log');
+            const tradeList = trades.trades || [];
+            const closedTrades = tradeList.filter(t => t.exit_date);
+            const openTrades = tradeList.filter(t => !t.exit_date);
+            const winners = closedTrades.filter(t => t.net_pnl > 0);
+            const losers = closedTrades.filter(t => t.net_pnl < 0);
+            const breakeven = closedTrades.filter(t => t.net_pnl === 0);
+            
+            const totalPnL = closedTrades.reduce((sum, t) => sum + (t.net_pnl || 0), 0);
+            const winRate = closedTrades.length > 0 ? (winners.length / closedTrades.length * 100) : 0;
+            const avgWin = winners.length > 0 ? winners.reduce((sum, t) => sum + t.net_pnl, 0) / winners.length : 0;
+            const avgLoss = losers.length > 0 ? losers.reduce((sum, t) => sum + Math.abs(t.net_pnl), 0) / losers.length : 0;
+            const expectancy = closedTrades.length > 0 ? totalPnL / closedTrades.length : 0;
+            const s = settings[0] || {trading_capital: 6000};
+            const sym = '$';
+            
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold">📊 Trade Journal Dashboard</h2>
+                    
+                    <!-- Win Rate Donut -->
+                    <div class="grid grid-cols-3 gap-6">
+                        <div class="bg-[#111827] rounded-xl p-6 border border-gray-700 text-center">
+                            <div class="text-6xl font-bold ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}">${winRate.toFixed(1)}%</div>
+                            <div class="text-gray-400 mt-2">Win Rate</div>
+                            <div class="flex justify-center gap-4 mt-4 text-sm">
+                                <span class="text-green-400">${winners.length}W</span>
+                                <span class="text-red-400">${losers.length}L</span>
+                                <span class="text-gray-400">${breakeven.length}BE</span>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
+                            <h3 class="font-bold text-lg mb-4">Journal Statistics</h3>
+                            <div class="space-y-3 text-sm">
+                                <div class="flex justify-between"><span class="text-gray-400">Closed Trades</span><span class="font-mono">${closedTrades.length}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Open Trades</span><span class="font-mono">${openTrades.length}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Trade Expectancy</span><span class="font-mono ${expectancy >= 0 ? 'text-green-400' : 'text-red-400'}">${sym}${expectancy.toFixed(2)}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Overall P/L</span><span class="font-mono text-lg ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}">${sym}${totalPnL.toFixed(2)}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Account Growth</span><span class="font-mono ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}">${(totalPnL / s.trading_capital * 100).toFixed(2)}%</span></div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
+                            <h3 class="font-bold text-lg mb-4">Trade Analysis</h3>
+                            <div class="space-y-3 text-sm">
+                                <div class="flex justify-between"><span class="text-gray-400">Avg Winning Trade</span><span class="font-mono text-green-400">${sym}${avgWin.toFixed(2)}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Avg Losing Trade</span><span class="font-mono text-red-400">-${sym}${avgLoss.toFixed(2)}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Profit Factor</span><span class="font-mono">${avgLoss > 0 ? (avgWin / avgLoss).toFixed(2) : 'N/A'}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Best Trade</span><span class="font-mono text-green-400">${sym}${Math.max(...closedTrades.map(t => t.net_pnl || 0), 0).toFixed(2)}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Worst Trade</span><span class="font-mono text-red-400">${sym}${Math.min(...closedTrades.map(t => t.net_pnl || 0), 0).toFixed(2)}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Actions -->
+                    <div class="grid grid-cols-4 gap-4">
+                        <button onclick="switchTab('trade-log')" class="p-4 bg-blue-600/20 border border-blue-600/50 rounded-xl hover:bg-blue-600/30 text-center">
+                            <div class="text-2xl">📝</div>
+                            <div class="mt-2">Add Trade</div>
+                        </button>
+                        <button onclick="switchTab('trade-summary')" class="p-4 bg-green-600/20 border border-green-600/50 rounded-xl hover:bg-green-600/30 text-center">
+                            <div class="text-2xl">📈</div>
+                            <div class="mt-2">Summary</div>
+                        </button>
+                        <button onclick="switchTab('pnl-tracker')" class="p-4 bg-purple-600/20 border border-purple-600/50 rounded-xl hover:bg-purple-600/30 text-center">
+                            <div class="text-2xl">💵</div>
+                            <div class="mt-2">P&L Tracker</div>
+                        </button>
+                        <button onclick="switchTab('mistakes')" class="p-4 bg-red-600/20 border border-red-600/50 rounded-xl hover:bg-red-600/30 text-center">
+                            <div class="text-2xl">⚠️</div>
+                            <div class="mt-2">Mistakes</div>
+                        </button>
+                    </div>
+                    
+                    <!-- Recent Trades -->
+                    <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
+                        <h3 class="font-bold text-lg mb-4">Recent Trades</h3>
+                        ${tradeList.length > 0 ? `
+                            <table class="w-full text-sm">
+                                <thead class="text-gray-400 border-b border-gray-700">
+                                    <tr>
+                                        <th class="text-left py-2">Date</th>
+                                        <th class="text-left py-2">Symbol</th>
+                                        <th class="text-left py-2">Strategy</th>
+                                        <th class="text-right py-2">Entry</th>
+                                        <th class="text-right py-2">Exit</th>
+                                        <th class="text-right py-2">P&L</th>
+                                        <th class="text-center py-2">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${tradeList.slice(0, 10).map(t => `
+                                        <tr class="border-b border-gray-700/50">
+                                            <td class="py-2 font-mono text-xs">${t.entry_date || '-'}</td>
+                                            <td class="py-2 font-mono font-bold">${t.symbol}</td>
+                                            <td class="py-2">${t.strategy || '-'}</td>
+                                            <td class="py-2 text-right font-mono">${sym}${t.entry_price?.toFixed(2) || '-'}</td>
+                                            <td class="py-2 text-right font-mono">${t.exit_price ? sym + t.exit_price.toFixed(2) : '-'}</td>
+                                            <td class="py-2 text-right font-mono ${(t.net_pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}">${t.exit_date ? sym + (t.net_pnl || 0).toFixed(2) : '-'}</td>
+                                            <td class="py-2 text-center"><span class="px-2 py-1 rounded text-xs ${t.exit_date ? (t.net_pnl > 0 ? 'bg-green-500/20 text-green-400' : t.net_pnl < 0 ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20') : 'bg-blue-500/20 text-blue-400'}">${t.exit_date ? (t.net_pnl > 0 ? 'WIN' : t.net_pnl < 0 ? 'LOSS' : 'BE') : 'OPEN'}</span></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        ` : '<p class="text-gray-500 text-center py-8">No trades recorded yet. Start by adding a trade!</p>'}
+                    </div>
+                </div>
+            `;
+        } catch(e) {
+            return `<div class="text-center py-20"><p class="text-red-400">Error: ${e.message}</p></div>`;
+        }
+    }
+
+    // ========== TRADE LOG ==========
+    async function tradeLogView() {
+        const strategies = ['SE - Canon', 'SE - White Marubozu', 'EL - Daily Swing', 'EL - False Breakout', 'EL - LC Bounce', 'CI - Trending Stocks'];
+        const mistakes = ['Tight Stop Loss', 'Entered Early', 'Entered Late', 'FOMO', 'Revenge Trading', 'Stock In News', 'Rule Deviation', 'Staying Long'];
+        const s = settings[0] || {trading_capital: 6000};
+        const sym = '$';
+        
+        let trades = [];
+        try {
+            const response = await api('GET', '/trade-log');
+            trades = response.trades || [];
+        } catch(e) { console.log('No trades yet'); }
+        
+        return `
+            <div class="space-y-6">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold">📝 Trade Log</h2>
+                    <div class="flex gap-2">
+                        <button onclick="showAddTradeModal()" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700">+ Add Trade</button>
+                        <button onclick="exportTrades()" class="px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600">📥 Export</button>
+                    </div>
+                </div>
+                
+                <!-- Trade Entry Form -->
+                <div class="bg-[#111827] rounded-xl p-6 border border-gray-700" id="trade-form">
+                    <h3 class="font-bold text-lg mb-4 text-blue-400">New Trade Entry</h3>
+                    
+                    <div class="grid grid-cols-6 gap-4 mb-4">
+                        <div><label class="text-xs text-gray-400">Entry Date</label><input type="datetime-local" id="tl-entry-date" class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm font-mono"></div>
+                        <div><label class="text-xs text-gray-400">Symbol</label><input id="tl-symbol" placeholder="AAPL" class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm font-mono"></div>
+                        <div><label class="text-xs text-gray-400">Strategy</label><select id="tl-strategy" class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm">${strategies.map(s => `<option>${s}</option>`).join('')}</select></div>
+                        <div><label class="text-xs text-gray-400">Direction</label><select id="tl-direction" class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm"><option>Long</option><option>Short</option></select></div>
+                        <div><label class="text-xs text-gray-400">Entry Price (${sym})</label><input type="number" id="tl-entry" step="0.01" class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm font-mono"></div>
+                        <div><label class="text-xs text-gray-400">Shares</label><input type="number" id="tl-shares" step="1" class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm font-mono"></div>
+                    </div>
+                    
+                    <div class="grid grid-cols-6 gap-4 mb-4">
+                        <div><label class="text-xs text-gray-400">Stop Loss (${sym})</label><input type="number" id="tl-sl" step="0.01" class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm font-mono"></div>
+                        <div><label class="text-xs text-gray-400">Take Profit (${sym})</label><input type="number" id="tl-tp" step="0.01" class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm font-mono"></div>
+                        <div><label class="text-xs text-gray-400">Exit Date</label><input type="datetime-local" id="tl-exit-date" class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm font-mono"></div>
+                        <div><label class="text-xs text-gray-400">Exit Price (${sym})</label><input type="number" id="tl-exit" step="0.01" class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm font-mono"></div>
+                        <div><label class="text-xs text-gray-400">Trade Costs (${sym})</label><input type="number" id="tl-costs" step="0.01" value="0" class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm font-mono"></div>
+                        <div><label class="text-xs text-gray-400">Mistake</label><select id="tl-mistake" class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm"><option value="">None</option>${mistakes.map(m => `<option>${m}</option>`).join('')}</select></div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div><label class="text-xs text-gray-400">Discipline Rating (1-10)</label><input type="number" id="tl-discipline" min="1" max="10" value="8" class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm font-mono"></div>
+                        <div><label class="text-xs text-gray-400">Notes</label><input id="tl-notes" placeholder="Trade notes..." class="w-full mt-1 px-2 py-1.5 bg-[#1f2937] border border-gray-600 rounded text-sm"></div>
+                    </div>
+                    
+                    <button onclick="saveTradeLog()" class="px-6 py-2 bg-green-600 rounded-lg hover:bg-green-700">💾 Save Trade</button>
+                </div>
+                
+                <!-- Trade List -->
+                <div class="bg-[#111827] rounded-xl border border-gray-700 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs">
+                            <thead class="bg-[#1f2937]">
+                                <tr>
+                                    <th class="text-left p-2 text-gray-400">Date</th>
+                                    <th class="text-left p-2 text-gray-400">Symbol</th>
+                                    <th class="text-left p-2 text-gray-400">Strategy</th>
+                                    <th class="text-center p-2 text-gray-400">Dir</th>
+                                    <th class="text-right p-2 text-gray-400">Entry</th>
+                                    <th class="text-right p-2 text-gray-400">Shares</th>
+                                    <th class="text-right p-2 text-gray-400">Size</th>
+                                    <th class="text-right p-2 text-gray-400">SL</th>
+                                    <th class="text-right p-2 text-gray-400">TP</th>
+                                    <th class="text-right p-2 text-gray-400">Exit</th>
+                                    <th class="text-right p-2 text-gray-400">Gross P/L</th>
+                                    <th class="text-right p-2 text-gray-400">Net P/L</th>
+                                    <th class="text-right p-2 text-gray-400">R</th>
+                                    <th class="text-center p-2 text-gray-400">Status</th>
+                                    <th class="text-center p-2 text-gray-400">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${trades.length > 0 ? trades.map(t => {
+                                    const tradeSize = (t.entry_price * t.shares).toFixed(2);
+                                    const grossPnL = t.exit_price ? ((t.direction === 'Long' ? t.exit_price - t.entry_price : t.entry_price - t.exit_price) * t.shares).toFixed(2) : '-';
+                                    const netPnL = t.net_pnl?.toFixed(2) || grossPnL;
+                                    const rValue = t.stop_loss && t.entry_price ? ((t.net_pnl || 0) / Math.abs(t.entry_price - t.stop_loss) / t.shares).toFixed(2) : '-';
+                                    return `
+                                        <tr class="border-t border-gray-700/50 hover:bg-[#1f2937]/50">
+                                            <td class="p-2 font-mono">${t.entry_date?.split('T')[0] || '-'}</td>
+                                            <td class="p-2 font-mono font-bold">${t.symbol}</td>
+                                            <td class="p-2">${t.strategy || '-'}</td>
+                                            <td class="p-2 text-center"><span class="${t.direction === 'Long' ? 'text-green-400' : 'text-red-400'}">${t.direction === 'Long' ? '▲' : '▼'}</span></td>
+                                            <td class="p-2 text-right font-mono">${sym}${t.entry_price?.toFixed(2)}</td>
+                                            <td class="p-2 text-right font-mono">${t.shares}</td>
+                                            <td class="p-2 text-right font-mono">${sym}${tradeSize}</td>
+                                            <td class="p-2 text-right font-mono text-red-400">${t.stop_loss ? sym + t.stop_loss.toFixed(2) : '-'}</td>
+                                            <td class="p-2 text-right font-mono text-green-400">${t.take_profit ? sym + t.take_profit.toFixed(2) : '-'}</td>
+                                            <td class="p-2 text-right font-mono">${t.exit_price ? sym + t.exit_price.toFixed(2) : '-'}</td>
+                                            <td class="p-2 text-right font-mono ${parseFloat(grossPnL) >= 0 ? 'text-green-400' : 'text-red-400'}">${grossPnL !== '-' ? sym + grossPnL : '-'}</td>
+                                            <td class="p-2 text-right font-mono ${parseFloat(netPnL) >= 0 ? 'text-green-400' : 'text-red-400'}">${netPnL !== '-' ? sym + netPnL : '-'}</td>
+                                            <td class="p-2 text-right font-mono">${rValue}R</td>
+                                            <td class="p-2 text-center"><span class="px-1.5 py-0.5 rounded text-xs ${t.exit_date ? (parseFloat(netPnL) > 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400') : 'bg-blue-500/20 text-blue-400'}">${t.exit_date ? 'CLOSED' : 'OPEN'}</span></td>
+                                            <td class="p-2 text-center">
+                                                <button onclick="editTrade(${t.id})" class="text-blue-400 hover:text-blue-300 mr-2">✏️</button>
+                                                <button onclick="deleteTrade(${t.id})" class="text-red-400 hover:text-red-300">🗑️</button>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('') : '<tr><td colspan="15" class="p-8 text-center text-gray-500">No trades recorded. Add your first trade above!</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    async function saveTradeLog() {
+        const data = {
+            entry_date: document.getElementById('tl-entry-date').value,
+            symbol: document.getElementById('tl-symbol').value.toUpperCase(),
+            strategy: document.getElementById('tl-strategy').value,
+            direction: document.getElementById('tl-direction').value,
+            entry_price: parseFloat(document.getElementById('tl-entry').value),
+            shares: parseInt(document.getElementById('tl-shares').value),
+            stop_loss: parseFloat(document.getElementById('tl-sl').value) || null,
+            take_profit: parseFloat(document.getElementById('tl-tp').value) || null,
+            exit_date: document.getElementById('tl-exit-date').value || null,
+            exit_price: parseFloat(document.getElementById('tl-exit').value) || null,
+            trade_costs: parseFloat(document.getElementById('tl-costs').value) || 0,
+            mistake: document.getElementById('tl-mistake').value || null,
+            discipline_rating: parseInt(document.getElementById('tl-discipline').value) || 8,
+            notes: document.getElementById('tl-notes').value
+        };
+        
+        // Calculate P&L if exit price exists
+        if (data.exit_price) {
+            const grossPnL = (data.direction === 'Long' ? data.exit_price - data.entry_price : data.entry_price - data.exit_price) * data.shares;
+            data.gross_pnl = grossPnL;
+            data.net_pnl = grossPnL - data.trade_costs;
+        }
+        
+        try {
+            await api('POST', '/trade-log', data);
+            toast('Trade saved!', 'success');
+            await render();
+        } catch(e) {
+            toast('Error: ' + e.message, 'error');
+        }
+    }
+
+    async function deleteTrade(id) {
+        if (confirm('Delete this trade?')) {
+            await api('DELETE', `/trade-log/${id}`);
+            toast('Trade deleted', 'success');
+            await render();
+        }
+    }
+
+    // ========== TRADE SUMMARY ==========
+    async function tradeSummaryView() {
+        try {
+            const response = await api('GET', '/trade-log');
+            const trades = response.trades || [];
+            const closed = trades.filter(t => t.exit_date);
+            const s = settings[0] || {trading_capital: 6000};
+            const sym = '$';
+            
+            // Calculate by strategy
+            const strategies = {};
+            closed.forEach(t => {
+                if (!strategies[t.strategy]) strategies[t.strategy] = {wins: 0, losses: 0, totalPnL: 0, count: 0};
+                strategies[t.strategy].count++;
+                strategies[t.strategy].totalPnL += t.net_pnl || 0;
+                if (t.net_pnl > 0) strategies[t.strategy].wins++;
+                else if (t.net_pnl < 0) strategies[t.strategy].losses++;
+            });
+            
+            const winners = closed.filter(t => t.net_pnl > 0);
+            const losers = closed.filter(t => t.net_pnl < 0);
+            
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold">📈 Trade Summary</h2>
+                    
+                    <div class="grid grid-cols-2 gap-6">
+                        <!-- Overall Stats -->
+                        <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
+                            <h3 class="font-bold text-lg mb-4">Overall Statistics</h3>
+                            <div class="space-y-3">
+                                <div class="flex justify-between"><span class="text-gray-400">Total Closed Trades</span><span class="font-mono">${closed.length}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Winning Trades</span><span class="font-mono text-green-400">${winners.length}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Losing Trades</span><span class="font-mono text-red-400">${losers.length}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Win Rate</span><span class="font-mono">${closed.length > 0 ? (winners.length / closed.length * 100).toFixed(1) : 0}%</span></div>
+                                <div class="border-t border-gray-700 pt-3 mt-3"></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Avg Winning Trade</span><span class="font-mono text-green-400">${sym}${winners.length > 0 ? (winners.reduce((s, t) => s + t.net_pnl, 0) / winners.length).toFixed(2) : '0.00'}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Avg Losing Trade</span><span class="font-mono text-red-400">${sym}${losers.length > 0 ? (losers.reduce((s, t) => s + Math.abs(t.net_pnl), 0) / losers.length).toFixed(2) : '0.00'}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Largest Win</span><span class="font-mono text-green-400">${sym}${Math.max(...closed.map(t => t.net_pnl || 0), 0).toFixed(2)}</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Largest Loss</span><span class="font-mono text-red-400">${sym}${Math.min(...closed.map(t => t.net_pnl || 0), 0).toFixed(2)}</span></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Strategy Breakdown -->
+                        <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
+                            <h3 class="font-bold text-lg mb-4">Strategy Performance</h3>
+                            <div class="space-y-3">
+                                ${Object.entries(strategies).map(([name, data]) => `
+                                    <div class="p-3 bg-[#1f2937] rounded-lg">
+                                        <div class="flex justify-between items-center">
+                                            <span class="font-medium">${name}</span>
+                                            <span class="font-mono ${data.totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}">${sym}${data.totalPnL.toFixed(2)}</span>
+                                        </div>
+                                        <div class="text-xs text-gray-400 mt-1">
+                                            ${data.count} trades | ${(data.wins / data.count * 100).toFixed(0)}% win rate | ${data.wins}W / ${data.losses}L
+                                        </div>
+                                    </div>
+                                `).join('') || '<p class="text-gray-500">No trades yet</p>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } catch(e) {
+            return `<div class="text-red-400">Error: ${e.message}</div>`;
+        }
+    }
+
+    // ========== P&L TRACKER ==========
+    async function pnlTrackerView() {
+        try {
+            const response = await api('GET', '/trade-log');
+            const trades = response.trades || [];
+            const closed = trades.filter(t => t.exit_date);
+            const sym = '$';
+            
+            // Group by date
+            const byDate = {};
+            closed.forEach(t => {
+                const date = t.exit_date?.split('T')[0];
+                if (date) {
+                    if (!byDate[date]) byDate[date] = {trades: 0, pnl: 0};
+                    byDate[date].trades++;
+                    byDate[date].pnl += t.net_pnl || 0;
+                }
+            });
+            
+            // Group by week
+            const byWeek = {};
+            closed.forEach(t => {
+                if (t.exit_date) {
+                    const d = new Date(t.exit_date);
+                    const week = `${d.getFullYear()}-W${Math.ceil((d.getDate() + new Date(d.getFullYear(), d.getMonth(), 1).getDay()) / 7)}`;
+                    if (!byWeek[week]) byWeek[week] = {trades: 0, pnl: 0};
+                    byWeek[week].trades++;
+                    byWeek[week].pnl += t.net_pnl || 0;
+                }
+            });
+            
+            // Group by month
+            const byMonth = {};
+            closed.forEach(t => {
+                if (t.exit_date) {
+                    const d = new Date(t.exit_date);
+                    const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    if (!byMonth[month]) byMonth[month] = {trades: 0, pnl: 0};
+                    byMonth[month].trades++;
+                    byMonth[month].pnl += t.net_pnl || 0;
+                }
+            });
+            
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold">💵 P&L Tracker</h2>
+                    
+                    <div class="grid grid-cols-3 gap-6">
+                        <!-- Daily P&L -->
+                        <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
+                            <h3 class="font-bold text-lg mb-4">Daily P&L</h3>
+                            <div class="space-y-2 max-h-80 overflow-y-auto">
+                                ${Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0])).map(([date, data]) => `
+                                    <div class="flex justify-between items-center p-2 bg-[#1f2937] rounded">
+                                        <span class="font-mono text-sm">${date}</span>
+                                        <div class="text-right">
+                                            <div class="font-mono ${data.pnl >= 0 ? 'text-green-400' : 'text-red-400'}">${sym}${data.pnl.toFixed(2)}</div>
+                                            <div class="text-xs text-gray-500">${data.trades} trades</div>
+                                        </div>
+                                    </div>
+                                `).join('') || '<p class="text-gray-500">No data</p>'}
+                            </div>
+                        </div>
+                        
+                        <!-- Weekly P&L -->
+                        <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
+                            <h3 class="font-bold text-lg mb-4">Weekly P&L</h3>
+                            <div class="space-y-2 max-h-80 overflow-y-auto">
+                                ${Object.entries(byWeek).sort((a, b) => b[0].localeCompare(a[0])).map(([week, data]) => `
+                                    <div class="flex justify-between items-center p-2 bg-[#1f2937] rounded">
+                                        <span class="font-mono text-sm">${week}</span>
+                                        <div class="text-right">
+                                            <div class="font-mono ${data.pnl >= 0 ? 'text-green-400' : 'text-red-400'}">${sym}${data.pnl.toFixed(2)}</div>
+                                            <div class="text-xs text-gray-500">${data.trades} trades</div>
+                                        </div>
+                                    </div>
+                                `).join('') || '<p class="text-gray-500">No data</p>'}
+                            </div>
+                        </div>
+                        
+                        <!-- Monthly P&L -->
+                        <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
+                            <h3 class="font-bold text-lg mb-4">Monthly P&L</h3>
+                            <div class="space-y-2 max-h-80 overflow-y-auto">
+                                ${Object.entries(byMonth).sort((a, b) => b[0].localeCompare(a[0])).map(([month, data]) => `
+                                    <div class="flex justify-between items-center p-2 bg-[#1f2937] rounded">
+                                        <span class="font-mono text-sm">${month}</span>
+                                        <div class="text-right">
+                                            <div class="font-mono ${data.pnl >= 0 ? 'text-green-400' : 'text-red-400'}">${sym}${data.pnl.toFixed(2)}</div>
+                                            <div class="text-xs text-gray-500">${data.trades} trades</div>
+                                        </div>
+                                    </div>
+                                `).join('') || '<p class="text-gray-500">No data</p>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } catch(e) {
+            return `<div class="text-red-400">Error: ${e.message}</div>`;
+        }
+    }
+
+    // ========== MISTAKES TRACKER ==========
+    async function mistakesView() {
+        try {
+            const response = await api('GET', '/trade-log');
+            const trades = response.trades || [];
+            const closed = trades.filter(t => t.exit_date);
+            const sym = '$';
+            
+            // Group by mistake
+            const byMistake = {};
+            closed.filter(t => t.mistake).forEach(t => {
+                if (!byMistake[t.mistake]) byMistake[t.mistake] = {trades: 0, pnl: 0};
+                byMistake[t.mistake].trades++;
+                byMistake[t.mistake].pnl += t.net_pnl || 0;
+            });
+            
+            const totalMistakeTrades = Object.values(byMistake).reduce((s, m) => s + m.trades, 0);
+            const totalMistakePnL = Object.values(byMistake).reduce((s, m) => s + m.pnl, 0);
+            
+            return `
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold">⚠️ Mistakes Tracker</h2>
+                    
+                    <!-- Summary -->
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center">
+                            <div class="text-3xl font-bold text-red-400">${totalMistakeTrades}</div>
+                            <div class="text-gray-400">Trades with Mistakes</div>
+                        </div>
+                        <div class="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center">
+                            <div class="text-3xl font-bold text-red-400">${sym}${totalMistakePnL.toFixed(2)}</div>
+                            <div class="text-gray-400">Total Impact</div>
+                        </div>
+                        <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 text-center">
+                            <div class="text-3xl font-bold text-yellow-400">${closed.length > 0 ? (totalMistakeTrades / closed.length * 100).toFixed(1) : 0}%</div>
+                            <div class="text-gray-400">Mistake Rate</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Mistakes Breakdown -->
+                    <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
+                        <h3 class="font-bold text-lg mb-4">Mistakes Breakdown</h3>
+                        <table class="w-full text-sm">
+                            <thead class="text-gray-400 border-b border-gray-700">
+                                <tr>
+                                    <th class="text-left py-2">Mistake</th>
+                                    <th class="text-right py-2">No. Trades</th>
+                                    <th class="text-right py-2">Total P&L Impact</th>
+                                    <th class="text-right py-2">Avg per Trade</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${Object.entries(byMistake).sort((a, b) => a[1].pnl - b[1].pnl).map(([mistake, data]) => `
+                                    <tr class="border-b border-gray-700/50">
+                                        <td class="py-3 font-medium">${mistake}</td>
+                                        <td class="py-3 text-right font-mono">${data.trades}</td>
+                                        <td class="py-3 text-right font-mono ${data.pnl >= 0 ? 'text-green-400' : 'text-red-400'}">${sym}${data.pnl.toFixed(2)}</td>
+                                        <td class="py-3 text-right font-mono ${data.pnl >= 0 ? 'text-green-400' : 'text-red-400'}">${sym}${(data.pnl / data.trades).toFixed(2)}</td>
+                                    </tr>
+                                `).join('') || '<tr><td colspan="4" class="py-8 text-center text-gray-500">No mistakes recorded. Great discipline!</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Improvement Tips -->
+                    <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
+                        <h3 class="font-bold text-lg mb-4">📚 Elder's Wisdom on Common Mistakes</h3>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div class="p-3 bg-[#1f2937] rounded-lg">
+                                <div class="font-medium text-yellow-400">Tight Stop Loss</div>
+                                <p class="text-gray-400 mt-1">"Place stops outside the noise. Use 2× ATR below entry for long trades."</p>
+                            </div>
+                            <div class="p-3 bg-[#1f2937] rounded-lg">
+                                <div class="font-medium text-yellow-400">FOMO</div>
+                                <p class="text-gray-400 mt-1">"Never chase a runaway market. Wait for pullbacks to the EMA."</p>
+                            </div>
+                            <div class="p-3 bg-[#1f2937] rounded-lg">
+                                <div class="font-medium text-yellow-400">Revenge Trading</div>
+                                <p class="text-gray-400 mt-1">"After a loss, step away. The 6% rule protects you from yourself."</p>
+                            </div>
+                            <div class="p-3 bg-[#1f2937] rounded-lg">
+                                <div class="font-medium text-yellow-400">Rule Deviation</div>
+                                <p class="text-gray-400 mt-1">"Good records are the single most important contribution to success."</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } catch(e) {
+            return `<div class="text-red-400">Error: ${e.message}</div>`;
+        }
     }
 
     // ========== CHECKLIST ==========

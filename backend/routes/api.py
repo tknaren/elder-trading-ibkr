@@ -917,3 +917,164 @@ def update_account_info():
     db.commit()
 
     return jsonify({'success': True, 'message': 'Account information updated'})
+
+
+# ============ TRADE LOG (JOURNAL) ============
+@api.route('/trade-log', methods=['GET'])
+def get_trade_log():
+    """Get all trades from trade log"""
+    user_id = get_user_id()
+    db = get_db()
+    
+    trades = db.execute('''
+        SELECT * FROM trade_log 
+        WHERE user_id = ? 
+        ORDER BY entry_date DESC
+    ''', (user_id,)).fetchall()
+    
+    return jsonify({'trades': [dict(t) for t in trades]})
+
+
+@api.route('/trade-log', methods=['POST'])
+def create_trade_log_entry():
+    """Create a new trade log entry"""
+    data = request.get_json()
+    user_id = get_user_id()
+    db = get_db()
+    
+    try:
+        db.execute('''
+            INSERT INTO trade_log (
+                user_id, entry_date, symbol, strategy, direction,
+                entry_price, shares, stop_loss, take_profit,
+                exit_date, exit_price, trade_costs, gross_pnl, net_pnl,
+                mistake, discipline_rating, notes, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            user_id, data.get('entry_date'), data.get('symbol'),
+            data.get('strategy'), data.get('direction'),
+            data.get('entry_price'), data.get('shares'),
+            data.get('stop_loss'), data.get('take_profit'),
+            data.get('exit_date'), data.get('exit_price'),
+            data.get('trade_costs', 0), data.get('gross_pnl'),
+            data.get('net_pnl'), data.get('mistake'),
+            data.get('discipline_rating', 8), data.get('notes'),
+            'closed' if data.get('exit_date') else 'open'
+        ))
+        db.commit()
+        
+        trade_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        return jsonify({'success': True, 'id': trade_id, 'message': 'Trade saved'}), 201
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@api.route('/trade-log/<int:trade_id>', methods=['PUT'])
+def update_trade_log_entry(trade_id):
+    """Update a trade log entry"""
+    data = request.get_json()
+    user_id = get_user_id()
+    db = get_db()
+    
+    try:
+        # Build dynamic update query
+        fields = []
+        values = []
+        for key, value in data.items():
+            if key not in ['id', 'user_id']:
+                fields.append(f'{key} = ?')
+                values.append(value)
+        
+        if fields:
+            values.append(trade_id)
+            values.append(user_id)
+            db.execute(f'''
+                UPDATE trade_log 
+                SET {', '.join(fields)}
+                WHERE id = ? AND user_id = ?
+            ''', tuple(values))
+            db.commit()
+        
+        return jsonify({'success': True, 'message': 'Trade updated'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+
+@api.route('/trade-log/<int:trade_id>', methods=['DELETE'])
+def delete_trade_log_entry(trade_id):
+    """Delete a trade log entry"""
+    user_id = get_user_id()
+    db = get_db()
+    
+    db.execute('DELETE FROM trade_log WHERE id = ? AND user_id = ?', (trade_id, user_id))
+    db.commit()
+    
+    return jsonify({'success': True, 'message': 'Trade deleted'})
+
+
+@api.route('/trade-log/summary', methods=['GET'])
+def get_trade_summary():
+    """Get trade summary statistics"""
+    user_id = get_user_id()
+    db = get_db()
+    
+    closed = db.execute('''
+        SELECT * FROM trade_log 
+        WHERE user_id = ? AND status = 'closed'
+    ''', (user_id,)).fetchall()
+    
+    trades = [dict(t) for t in closed]
+    
+    winners = [t for t in trades if (t.get('net_pnl') or 0) > 0]
+    losers = [t for t in trades if (t.get('net_pnl') or 0) < 0]
+    
+    total_pnl = sum(t.get('net_pnl', 0) or 0 for t in trades)
+    avg_win = sum(t['net_pnl'] for t in winners) / len(winners) if winners else 0
+    avg_loss = sum(abs(t['net_pnl']) for t in losers) / len(losers) if losers else 0
+    
+    return jsonify({
+        'total_trades': len(trades),
+        'winners': len(winners),
+        'losers': len(losers),
+        'breakeven': len(trades) - len(winners) - len(losers),
+        'win_rate': len(winners) / len(trades) * 100 if trades else 0,
+        'total_pnl': total_pnl,
+        'avg_win': avg_win,
+        'avg_loss': avg_loss,
+        'profit_factor': avg_win / avg_loss if avg_loss > 0 else 0,
+        'expectancy': total_pnl / len(trades) if trades else 0
+    })
+
+
+# ============ INDICATOR FILTER CONFIG ============
+@api.route('/indicator-filters', methods=['GET'])
+def get_indicator_filters():
+    """Get saved indicator filter configuration"""
+    user_id = get_user_id()
+    db = get_db()
+    
+    config = db.execute('''
+        SELECT config FROM indicator_filters WHERE user_id = ?
+    ''', (user_id,)).fetchone()
+    
+    if config:
+        return jsonify(json.loads(config['config']))
+    
+    # Return default config
+    return jsonify(DEFAULT_INDICATOR_CONFIG)
+
+
+@api.route('/indicator-filters', methods=['POST'])
+def save_indicator_filters():
+    """Save indicator filter configuration"""
+    user_id = get_user_id()
+    data = request.get_json()
+    db = get_db()
+    
+    db.execute('''
+        INSERT OR REPLACE INTO indicator_filters (user_id, config, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+    ''', (user_id, json.dumps(data)))
+    db.commit()
+    
+    return jsonify({'success': True, 'message': 'Indicator filters saved'})
