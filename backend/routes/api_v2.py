@@ -9,8 +9,8 @@ import json
 
 from models.database import get_database
 from services.screener_v2 import (
-    run_weekly_screen_v2, 
-    run_daily_screen_v2, 
+    run_weekly_screen_v2,
+    run_daily_screen_v2,
     scan_stock_v2,
     calculate_elder_trade_levels
 )
@@ -52,7 +52,7 @@ def get_user_id():
 def run_screener_v2():
     """
     Run enhanced screener v2 with all validation fixes
-    
+
     Features:
     - Screen 1 as mandatory gate
     - Impulse RED blocks trades
@@ -63,30 +63,30 @@ def run_screener_v2():
     data = request.get_json() or {}
     market = data.get('market', 'US')
     symbols = data.get('symbols')
-    
+
     results = run_weekly_screen_v2(market, symbols)
-    
+
     # Save to database
     db = get_db()
     user_id = get_user_id()
     today = datetime.now().date()
-    
+
     db.execute('''
         INSERT INTO weekly_scans 
         (user_id, market, scan_date, week_start, week_end, results, summary)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     ''', (
-        user_id, market, today, 
+        user_id, market, today,
         today - timedelta(days=today.weekday()),
         today + timedelta(days=6-today.weekday()),
         json.dumps(results['all_results']),
         json.dumps(results['summary'])
     ))
     db.commit()
-    
+
     scan_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
     results['scan_id'] = scan_id
-    
+
     return jsonify(results)
 
 
@@ -108,7 +108,7 @@ def ibkr_status_v2():
     """Check IBKR Gateway connection status"""
     connected, message = check_ibkr_connection()
     account_id = get_account_id() if connected else None
-    
+
     return jsonify({
         'connected': connected,
         'message': message,
@@ -135,7 +135,7 @@ def get_orders():
 def create_order():
     """
     Place a new order
-    
+
     Body:
     {
         "symbol": "AAPL",
@@ -147,7 +147,7 @@ def create_order():
     }
     """
     data = request.get_json()
-    
+
     result = place_single_order(
         symbol=data['symbol'],
         side=data['side'],
@@ -156,7 +156,7 @@ def create_order():
         order_type=data.get('order_type', 'LMT'),
         tif=data.get('tif', 'GTC')
     )
-    
+
     if result['success']:
         return jsonify(result), 201
     return jsonify(result), 400
@@ -166,7 +166,7 @@ def create_order():
 def create_bracket_order():
     """
     Place bracket order (Entry + Stop + Target)
-    
+
     Body:
     {
         "symbol": "AAPL",
@@ -177,7 +177,7 @@ def create_bracket_order():
     }
     """
     data = request.get_json()
-    
+
     result = place_bracket_order(
         symbol=data['symbol'],
         quantity=data['quantity'],
@@ -185,7 +185,7 @@ def create_bracket_order():
         stop_loss=data['stop_loss'],
         take_profit=data['take_profit']
     )
-    
+
     if result['success']:
         return jsonify(result), 201
     return jsonify(result), 400
@@ -225,23 +225,24 @@ def get_all_positions():
     Returns positions from IBKR with real-time market prices
     """
     result = get_positions()
-    
+
     if result['success']:
         # Add alerts
         db = get_db()
         user_id = get_user_id()
-        
+
         # Get trade bills for matching
         bills = db.execute('''
             SELECT * FROM trade_bills WHERE user_id = ? AND status = 'PENDING'
         ''', (user_id,)).fetchall()
         trade_bills = [dict(b) for b in bills]
-        
+
         alerts = get_position_alerts(result['positions'], trade_bills)
         result['alerts'] = alerts
         result['alert_count'] = len(alerts)
-        result['high_priority_alerts'] = len([a for a in alerts if a.get('severity') == 'HIGH'])
-    
+        result['high_priority_alerts'] = len(
+            [a for a in alerts if a.get('severity') == 'HIGH'])
+
     return jsonify(result)
 
 
@@ -249,10 +250,10 @@ def get_all_positions():
 def get_position_summary():
     """Get position summary with totals"""
     result = get_positions()
-    
+
     if result['success']:
         positions = result['positions']
-        
+
         return jsonify({
             'success': True,
             'total_positions': len(positions),
@@ -263,7 +264,7 @@ def get_position_summary():
             'losing_positions': len([p for p in positions if p['unrealized_pnl'] < 0]),
             'positions': positions
         })
-    
+
     return jsonify(result)
 
 
@@ -271,30 +272,30 @@ def get_position_summary():
 def close_position(symbol):
     """
     Close a position (market sell)
-    
+
     Body (optional):
     {
         "quantity": 50  // Partial close
     }
     """
     data = request.get_json() or {}
-    
+
     # Get current position
     positions = get_positions()
     if not positions['success']:
         return jsonify(positions), 400
-    
+
     position = None
     for p in positions['positions']:
         if p['symbol'] == symbol:
             position = p
             break
-    
+
     if not position:
         return jsonify({'success': False, 'error': f'No position found for {symbol}'}), 404
-    
+
     quantity = data.get('quantity', position['quantity'])
-    
+
     # Place market sell order
     result = place_single_order(
         symbol=symbol,
@@ -304,10 +305,10 @@ def close_position(symbol):
         order_type='MKT',
         tif='DAY'
     )
-    
+
     if result['success']:
         result['message'] = f'Closing {quantity} shares of {symbol}'
-    
+
     return jsonify(result)
 
 
@@ -319,10 +320,10 @@ def close_position(symbol):
 def place_order_from_bill(bill_id):
     """
     Place IBKR order directly from Trade Bill
-    
+
     This is the key connection in the workflow:
     Screener → Trade Bill → IBKR Order
-    
+
     The Trade Bill contains:
     - Entry price (EMA-22)
     - Stop loss (deepest penetration)
@@ -331,17 +332,17 @@ def place_order_from_bill(bill_id):
     """
     db = get_db()
     user_id = get_user_id()
-    
+
     # Get trade bill
     bill = db.execute('''
         SELECT * FROM trade_bills WHERE id = ? AND user_id = ?
     ''', (bill_id, user_id)).fetchone()
-    
+
     if not bill:
         return jsonify({'success': False, 'error': 'Trade Bill not found'}), 404
-    
+
     bill_data = dict(bill)
-    
+
     # Place the order
     result = create_trade_from_bill({
         'id': bill_id,
@@ -351,7 +352,7 @@ def place_order_from_bill(bill_id):
         'target': bill_data['target_price'],
         'quantity': bill_data['quantity']
     })
-    
+
     if result['success']:
         # Update trade bill status
         db.execute('''
@@ -360,9 +361,9 @@ def place_order_from_bill(bill_id):
             WHERE id = ?
         ''', (result.get('order_id'), bill_id))
         db.commit()
-        
+
         result['trade_bill_updated'] = True
-    
+
     return jsonify(result)
 
 
@@ -370,7 +371,7 @@ def place_order_from_bill(bill_id):
 def create_bill_from_screener():
     """
     Create Trade Bill directly from screener result
-    
+
     Body:
     {
         "symbol": "AAPL",
@@ -379,42 +380,43 @@ def create_bill_from_screener():
     """
     data = request.get_json()
     symbol = data.get('symbol')
-    
+
     if not symbol:
         return jsonify({'success': False, 'error': 'Symbol required'}), 400
-    
+
     # Get fresh analysis if not provided
     screener_data = data.get('screener_data')
     if not screener_data:
         screener_data = scan_stock_v2(symbol)
         if not screener_data:
             return jsonify({'success': False, 'error': f'Could not analyze {symbol}'}), 400
-    
+
     # Get account settings for position sizing
     db = get_db()
     user_id = get_user_id()
-    
+
     account = db.execute('''
         SELECT * FROM account_settings WHERE user_id = ?
     ''', (user_id,)).fetchone()
-    
+
     if not account:
         return jsonify({'success': False, 'error': 'Account settings not found'}), 400
-    
+
     account = dict(account)
-    risk_per_trade = account['trading_capital'] * (account['risk_per_trade'] / 100)
-    
+    risk_per_trade = account['trading_capital'] * \
+        (account['risk_per_trade'] / 100)
+
     # Calculate position size
     entry = screener_data['entry']
     stop = screener_data['stop_loss']
     risk_per_share = entry - stop
-    
+
     if risk_per_share <= 0:
         return jsonify({'success': False, 'error': 'Invalid stop loss (above entry)'}), 400
-    
+
     quantity = int(risk_per_trade / risk_per_share)
     position_value = quantity * entry
-    
+
     # Create trade bill
     db.execute('''
         INSERT INTO trade_bills (
@@ -433,9 +435,9 @@ def create_bill_from_screener():
         'PENDING'
     ))
     db.commit()
-    
+
     bill_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
-    
+
     return jsonify({
         'success': True,
         'trade_bill_id': bill_id,
@@ -460,35 +462,35 @@ def create_bill_from_screener():
 def sync_trade_log_from_ibkr():
     """
     Sync trade log with filled orders from IBKR
-    
+
     This pulls executed trades from IBKR and creates/updates trade log entries
     """
     result = get_filled_trades(days_back=7)
-    
+
     if not result['success']:
         return jsonify(result), 400
-    
+
     db = get_db()
     user_id = get_user_id()
-    
+
     synced = 0
     skipped = 0
-    
+
     for trade in result['trades']:
         # Check if already exists
         existing = db.execute('''
             SELECT id FROM trade_log 
             WHERE user_id = ? AND symbol = ? AND entry_date = ?
         ''', (user_id, trade['symbol'], trade['execution_time'])).fetchone()
-        
+
         if existing:
             skipped += 1
             continue
-        
+
         # Create trade log entry
         side = 'Long' if trade['side'] == 'BOT' else 'Short'
         status = 'open' if trade['side'] == 'BOT' else 'closed'
-        
+
         db.execute('''
             INSERT INTO trade_log (
                 user_id, entry_date, symbol, strategy, direction,
@@ -501,9 +503,9 @@ def sync_trade_log_from_ibkr():
             f"Auto-synced from IBKR. Order ref: {trade['order_ref']}"
         ))
         synced += 1
-    
+
     db.commit()
-    
+
     return jsonify({
         'success': True,
         'synced': synced,
@@ -519,22 +521,22 @@ def update_trade_log_from_positions():
     Update open trade log entries with current position P/L
     """
     positions = get_positions()
-    
+
     if not positions['success']:
         return jsonify(positions), 400
-    
+
     db = get_db()
     user_id = get_user_id()
-    
+
     updated = 0
-    
+
     for pos in positions['positions']:
         # Find matching open trade
         trade = db.execute('''
             SELECT id FROM trade_log 
             WHERE user_id = ? AND symbol = ? AND status = 'open'
         ''', (user_id, pos['symbol'])).fetchone()
-        
+
         if trade:
             # Update with current P/L
             db.execute('''
@@ -547,9 +549,9 @@ def update_trade_log_from_positions():
                 trade['id']
             ))
             updated += 1
-    
+
     db.commit()
-    
+
     return jsonify({
         'success': True,
         'updated': updated,
@@ -573,11 +575,11 @@ def get_batch_market_data():
     """Get market data for multiple symbols"""
     data = request.get_json()
     symbols = data.get('symbols', [])
-    
+
     results = {}
-    for symbol in symbols[:20]:  # Limit to 20
+    for symbol in symbols[:50]:  # Limit to 20
         results[symbol] = get_market_data(symbol)
-    
+
     return jsonify({'results': results})
 
 
@@ -589,7 +591,7 @@ def get_batch_market_data():
 def get_workflow_status():
     """
     Get overall workflow status for dashboard
-    
+
     Shows:
     - Latest screener results
     - Pending trade bills
@@ -599,41 +601,41 @@ def get_workflow_status():
     """
     db = get_db()
     user_id = get_user_id()
-    
+
     # Get latest scan
     latest_scan = db.execute('''
         SELECT * FROM weekly_scans 
         WHERE user_id = ? 
         ORDER BY scan_date DESC LIMIT 1
     ''', (user_id,)).fetchone()
-    
+
     scan_summary = None
     if latest_scan:
         scan_summary = json.loads(latest_scan['summary'])
         scan_summary['scan_date'] = latest_scan['scan_date']
-    
+
     # Get pending trade bills
     pending_bills = db.execute('''
         SELECT COUNT(*) as count FROM trade_bills 
         WHERE user_id = ? AND status = 'PENDING'
     ''', (user_id,)).fetchone()
-    
+
     # Get open orders from IBKR
     orders = get_open_orders()
-    
+
     # Get positions
     positions = get_positions()
-    
+
     # Get trade bills for alerts
     bills = db.execute('''
         SELECT * FROM trade_bills WHERE user_id = ?
     ''', (user_id,)).fetchall()
     trade_bills = [dict(b) for b in bills]
-    
+
     alerts = []
     if positions['success']:
         alerts = get_position_alerts(positions['positions'], trade_bills)
-    
+
     return jsonify({
         'ibkr_connected': positions['success'],
         'latest_scan': scan_summary,

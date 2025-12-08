@@ -236,8 +236,8 @@
                                                 </div>
                                             </td>
                                             <td class="p-3">
-                                                <span class="${r.weekly_bullish?'text-green-400':'text-red-400'}">${r.weekly_ema_slope||'?'}</span>
-                                                ${r.weekly_macd_rising?'<span class="text-green-400 ml-1">↑</span>':'<span class="text-red-400 ml-1">↓</span>'}
+                                                <span class="${r.weekly_bullish?'text-green-400':'text-red-400'}" title="${r.ema_status||'No data'}">${r.screen1_score||0}/6</span>
+                                                ${r.macd_h_rising?'<span class="text-green-400 ml-1">↑</span>':'<span class="text-red-400 ml-1">↓</span>'}
                                             </td>
                                             <td class="p-3">
                                                 <span class="px-2 py-0.5 rounded text-xs font-bold ${

@@ -423,63 +423,53 @@ def calculate_all_indicators(highs: pd.Series, lows: pd.Series,
 GRADING_CRITERIA = """
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                    ELDER TRIPLE SCREEN - GRADING CRITERIA                     ║
-║                              (Version 2.1)                                    ║
+║                              (Version 2.3)                                    ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                               ║
-║  SCREEN 1 (Weekly Trend) - Strategic Direction [MANDATORY GATE]              ║
+║  SCREEN 1 (Weekly) - Maximum 6 points                                         ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
-║  ALL THREE conditions MUST be true to proceed:                               ║
-║  ✓ 22-Week EMA Slope: Rising                                                 ║
-║  ✓ Weekly MACD-H: Rising (slope, not value)                                  ║
-║  ✓ Weekly Impulse: GREEN (permission to buy)                                 ║
-║  ✗ If ANY condition fails = STAY OUT (no long trades)                        ║
+║  1. Weekly MACD-H Rising:                                                     ║
+║     +2 │ Rising from below 0 (Spring - best buy signal)                      ║
+║     +1 │ Rising above 0 (Summer)                                              ║
+║      0 │ Not rising                                                           ║
 ║                                                                               ║
-║  SCREEN 2 (Daily Entry) - Tactical Timing                                     ║
-║  ─────────────────────────────────────────────────────────────────────────── ║
-║  ✓ Force Index (2-EMA) < 0: Pullback in uptrend = BUY ZONE                   ║
-║  ✓ RSI < 20: Oversold = Strong entry | RSI 20-40: Neutral-Oversold           ║
-║  ✓ Price near 22-EMA: Buying value, not chasing                              ║
-║  ✓ Price near Lower Keltner Channel: Support zone                            ║
-║  ✓ Daily Impulse RED: Bears retreating, permission to buy                    ║
-║  ✓ Daily Impulse BLUE after RED: Transition = excellent entry                ║
-║  ✗ Daily Impulse GREEN: DO NOT BUY (wait for pullback)                       ║
+║  2. MACD Line vs Signal:                                                      ║
+║     +2 │ MACD Line < Signal AND both < 0 (deep oversold)                     ║
+║     +1 │ MACD Line < Signal                                                   ║
+║      0 │ MACD Line above Signal                                               ║
 ║                                                                               ║
-║  SCREEN 3 (Entry Technique) - Execution                                       ║
-║  ─────────────────────────────────────────────────────────────────────────── ║
-║  • Entry: Buy-stop above previous day's high (confirms strength)             ║
-║  • Stop Loss: 2 × ATR below entry, or below recent swing low                 ║
-║  • Target: Upper Keltner Channel, or 1:2 / 1:3 Risk-Reward                   ║
+║  3. EMA Alignment (20 > 50 > 100 > 200):                                      ║
+║     +2 │ Perfect alignment (20 > 50 > 100 > 200)                             ║
+║     +1 │ Partial (50 > 100 > 200, but 20 < 50)                               ║
+║      0 │ No alignment                                                         ║
 ║                                                                               ║
-║  SIGNAL STRENGTH SCORING (0-15+)                                              ║
+║  SCREEN 2 (Daily) - Maximum 5 points                                          ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
-║  +2 │ Weekly EMA rising strongly (STRONG_BULLISH)                            ║
-║  +1 │ Weekly MACD-H rising                                                   ║
-║  +2 │ Force Index < 0 (pullback zone)                                        ║
-║  +2 │ RSI < 20 (oversold)                                                    ║
-║  +1 │ RSI 20-40 (neutral to oversold)                                        ║
-║  +1 │ Price at or below 22-EMA (value zone)                                  ║
-║  +1 │ Bullish divergence (MACD or RSI)                                       ║
-║  +1 │ Daily Impulse RED (permission to buy)                                  ║
-║  +2 │ Daily Impulse BLUE after RED (strong transition signal)                ║
-║  +2 │ Price near lower Keltner Channel                                       ║
-║  +2 │ False downside breakout                                                ║
-║  +2 │ Strong bullish pattern (Engulfing, Tweezer, Three Candle Swing)        ║
-║  +1 │ Other bullish candlestick pattern                                      ║
+║  1. Price vs Keltner Channel KC(20,10,1):                                     ║
+║     +2 │ Between Lower(-1) and Lower(-3) - Deep pullback                     ║
+║     +1 │ Between Mid and Lower(-1) - Normal pullback                         ║
+║      0 │ Above mid-channel                                                    ║
+║                                                                               ║
+║  2. Force Index EMA(2):                                                       ║
+║     +1 │ Force Index < 0                                                      ║
+║      0 │ Force Index >= 0                                                     ║
+║                                                                               ║
+║  3. Stochastic:                                                               ║
+║     +1 │ Stochastic < 50                                                      ║
+║      0 │ Stochastic >= 50                                                     ║
+║                                                                               ║
+║  4. Bullish Pattern:                                                          ║
+║     +1 │ Bullish Pinbar, Bullish Engulfing, False Breakout, or similar       ║
+║      0 │ No pattern                                                           ║
 ║                                                                               ║
 ║  GRADES                                                                       ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
-║  ⭐ A-TRADE: Signal Strength ≥ 7                                              ║
-║             → TRADE: High probability setup, place order                     ║
-║  📊 B-TRADE: Signal Strength 5-6                                              ║
-║             → PREPARE: Good setup developing, set alerts                     ║
-║  👀 C-WATCH: Signal Strength 1-4                                              ║
-║             → WATCH: Early stage, monitor for improvement                    ║
-║  🔴 AVOID:   Signal Strength ≤ 0 OR Daily Impulse GREEN                       ║
-║             → NO TRADE: Wait for pullback or conditions to improve           ║
+║  ⭐ A-TRADE: Score ≥ 7  → TRADE (High probability)                            ║
+║  📊 B-TRADE: Score 5-6  → PREPARE (Set alerts)                                ║
+║  👀 C-WATCH: Score 1-4  → WATCH (Monitor)                                     ║
+║  🔴 AVOID:   Score = 0  → No signals                                          ║
 ║                                                                               ║
-║  KEY RULES:                                                                   ║
-║  • Weekly Impulse GREEN = Gate to proceed (required)                         ║
-║  • Daily Impulse GREEN = DO NOT BUY (wait for RED/BLUE pullback)             ║
+║  MAXIMUM POSSIBLE SCORE: 11 (Screen 1: 6 + Screen 2: 5)                       ║
 ║                                                                               ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """

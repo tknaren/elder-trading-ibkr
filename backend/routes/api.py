@@ -87,14 +87,10 @@ def weekly_screener():
         ).fetchone()
         if watchlist:
             symbols = json.loads(watchlist['symbols'])
-    else:
-        # Get default watchlist for market
-        watchlist = db.execute('''
-            SELECT symbols FROM watchlists 
-            WHERE user_id = ? AND market = ? AND is_default = 1
-        ''', (user_id, market)).fetchone()
-        if watchlist:
-            symbols = json.loads(watchlist['symbols'])
+
+    # If no specific watchlist requested and no symbols provided, use full market list (not default watchlist)
+    # This ensures we always scan the full NASDAQ_100 or NIFTY_100
+    # symbols will be None, and run_weekly_screen will use the full list
 
     # Run the screener
     results = run_weekly_screen(market, symbols)
@@ -925,13 +921,13 @@ def get_trade_log():
     """Get all trades from trade log"""
     user_id = get_user_id()
     db = get_db()
-    
+
     trades = db.execute('''
         SELECT * FROM trade_log 
         WHERE user_id = ? 
         ORDER BY entry_date DESC
     ''', (user_id,)).fetchall()
-    
+
     return jsonify({'trades': [dict(t) for t in trades]})
 
 
@@ -941,7 +937,7 @@ def create_trade_log_entry():
     data = request.get_json()
     user_id = get_user_id()
     db = get_db()
-    
+
     try:
         db.execute('''
             INSERT INTO trade_log (
@@ -962,7 +958,7 @@ def create_trade_log_entry():
             'closed' if data.get('exit_date') else 'open'
         ))
         db.commit()
-        
+
         trade_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         return jsonify({'success': True, 'id': trade_id, 'message': 'Trade saved'}), 201
     except Exception as e:
@@ -975,7 +971,7 @@ def update_trade_log_entry(trade_id):
     data = request.get_json()
     user_id = get_user_id()
     db = get_db()
-    
+
     try:
         # Build dynamic update query
         fields = []
@@ -984,7 +980,7 @@ def update_trade_log_entry(trade_id):
             if key not in ['id', 'user_id']:
                 fields.append(f'{key} = ?')
                 values.append(value)
-        
+
         if fields:
             values.append(trade_id)
             values.append(user_id)
@@ -994,7 +990,7 @@ def update_trade_log_entry(trade_id):
                 WHERE id = ? AND user_id = ?
             ''', tuple(values))
             db.commit()
-        
+
         return jsonify({'success': True, 'message': 'Trade updated'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
@@ -1005,10 +1001,11 @@ def delete_trade_log_entry(trade_id):
     """Delete a trade log entry"""
     user_id = get_user_id()
     db = get_db()
-    
-    db.execute('DELETE FROM trade_log WHERE id = ? AND user_id = ?', (trade_id, user_id))
+
+    db.execute('DELETE FROM trade_log WHERE id = ? AND user_id = ?',
+               (trade_id, user_id))
     db.commit()
-    
+
     return jsonify({'success': True, 'message': 'Trade deleted'})
 
 
@@ -1017,21 +1014,23 @@ def get_trade_summary():
     """Get trade summary statistics"""
     user_id = get_user_id()
     db = get_db()
-    
+
     closed = db.execute('''
         SELECT * FROM trade_log 
         WHERE user_id = ? AND status = 'closed'
     ''', (user_id,)).fetchall()
-    
+
     trades = [dict(t) for t in closed]
-    
+
     winners = [t for t in trades if (t.get('net_pnl') or 0) > 0]
     losers = [t for t in trades if (t.get('net_pnl') or 0) < 0]
-    
+
     total_pnl = sum(t.get('net_pnl', 0) or 0 for t in trades)
-    avg_win = sum(t['net_pnl'] for t in winners) / len(winners) if winners else 0
-    avg_loss = sum(abs(t['net_pnl']) for t in losers) / len(losers) if losers else 0
-    
+    avg_win = sum(t['net_pnl'] for t in winners) / \
+        len(winners) if winners else 0
+    avg_loss = sum(abs(t['net_pnl'])
+                   for t in losers) / len(losers) if losers else 0
+
     return jsonify({
         'total_trades': len(trades),
         'winners': len(winners),
@@ -1052,14 +1051,14 @@ def get_indicator_filters():
     """Get saved indicator filter configuration"""
     user_id = get_user_id()
     db = get_db()
-    
+
     config = db.execute('''
         SELECT config FROM indicator_filters WHERE user_id = ?
     ''', (user_id,)).fetchone()
-    
+
     if config:
         return jsonify(json.loads(config['config']))
-    
+
     # Return default config
     return jsonify(DEFAULT_INDICATOR_CONFIG)
 
@@ -1070,11 +1069,11 @@ def save_indicator_filters():
     user_id = get_user_id()
     data = request.get_json()
     db = get_db()
-    
+
     db.execute('''
         INSERT OR REPLACE INTO indicator_filters (user_id, config, updated_at)
         VALUES (?, ?, CURRENT_TIMESTAMP)
     ''', (user_id, json.dumps(data)))
     db.commit()
-    
+
     return jsonify({'success': True, 'message': 'Indicator filters saved'})
