@@ -167,9 +167,9 @@ def analyze_weekly_trend(hist: pd.DataFrame) -> Dict:
             macd_line_score = 1
             macd_line_status = "MACD < Signal"
 
-    # 3. EMA Alignment Score (20 > 50 > 100 > 200)
+    # 3. EMA Alignment Score (20 > 50 > 100)
+    # NEW RULE v2.3: ONLY check EMA 20 > EMA 50 > EMA 100. Ignore EMA 200 completely
     # Use min(len(closes), period) to handle cases with less historical data
-    # But ensure we use at least period/2 data points for some stability
     data_len = len(closes)
 
     ema_20_period = min(data_len, 20) if data_len >= 5 else data_len
@@ -185,12 +185,15 @@ def analyze_weekly_trend(hist: pd.DataFrame) -> Dict:
     ema_alignment_score = 0
     ema_status = "No alignment"
 
-    if ema_20 > ema_50 > ema_100 > ema_200:
+    # NEW RULE v2.3: If EMA 20 > EMA 50 AND EMA 50 > EMA 100, then +2 points
+    # For all other scenarios (including when only 50>100), score is 0
+    if ema_20 > ema_50 and ema_50 > ema_100:
         ema_alignment_score = 2
-        ema_status = "Perfect: 20 > 50 > 100 > 200"
-    elif ema_50 > ema_100 > ema_200:  # 50 > 100 > 200 but 20 < 50
-        ema_alignment_score = 1
-        ema_status = "Partial: 50 > 100 > 200 (20 below 50)"
+        ema_status = "Perfect: 20 > 50 > 100 (ignore 200)"
+    else:
+        # All other scenarios = 0 points (no partial credit)
+        ema_alignment_score = 0
+        ema_status = "No alignment"
 
     # Total Screen 1 Score
     screen1_score = macd_h_score + macd_line_score + ema_alignment_score

@@ -280,16 +280,14 @@ def check_connection() -> Tuple[bool, str]:
 
 def fetch_stock_data(symbol: str, period: str = '2y') -> Optional[Dict]:
     """
-    Fetch stock data with intelligent indicator caching
+    Fetch stock data with OHLCV caching.
+    Indicators are calculated and cached separately by screener_v2.
 
     Strategy:
-    1. Check cached indicators - if fresh (< 1 day old), load them
-    2. Find last date in cached indicators
-    3. Fetch OHLCV data only for dates AFTER last cached date
-    4. Recalculate indicators incrementally from last cached values
-    5. Store new indicator values in cache
-
-    Returns dictionary with 'history' DataFrame, indicators, and metadata, or None if failed.
+    1. Check stock_data_sync for fresh OHLCV cache (< 1 day old)
+    2. If fresh: load from stock_historical_data
+    3. If stale: fetch from IBKR, cache it
+    4. Return full history DataFrame for indicator calculation
     """
     from models.database import get_database
     import pandas as pd
@@ -313,110 +311,58 @@ def fetch_stock_data(symbol: str, period: str = '2y') -> Optional[Dict]:
 
     db = get_database().get_connection()
 
-    # Check if we have fresh cached indicators (< 1 day old)
-    indicator_sync = db.execute(
-        'SELECT * FROM stock_indicator_sync WHERE symbol = ?',
+    # Check if we have fresh OHLCV cache (< 1 day old)
+    sync_row = db.execute(
+        'SELECT * FROM stock_data_sync WHERE symbol = ?',
         (symbol,)
     ).fetchone()
 
-    last_daily_date = None
-    cached_indicators = {}
-    use_indicator_cache = False
-
-    if indicator_sync:
-        last_updated = datetime.fromisoformat(indicator_sync['last_updated'])
-        if datetime.now() - last_updated < timedelta(hours=24):
-            last_daily_date = indicator_sync['last_daily_date']
-            use_indicator_cache = True
-            print(
-                f"✅ {symbol}: Cached indicators are fresh (last updated: {indicator_sync['last_updated']})")
-
-    # Determine data to fetch
+    use_cache = False
     hist = None
-    needs_full_calc = False
 
-    if use_indicator_cache and last_daily_date:
-        print(f"📊 {symbol}: Fetching data AFTER {last_daily_date} from IBKR...")
-        # Fetch only new data since last cached date
-        hist = client.get_historical_data(conid, period=period, bar='1d')
+    if sync_row:
+        last_updated = datetime.fromisoformat(sync_row['last_updated'])
+        if datetime.now() - last_updated < timedelta(hours=24):
+            use_cache = True
+            print(f"📦 {symbol}: Using cached OHLCV data")
 
-        if hist is not None and not hist.empty:
-            # Filter to only dates after last cached date
-            last_cached = pd.to_datetime(last_daily_date)
-            hist = hist[hist.index > last_cached]
-
-            if len(hist) > 0:
-                print(f"📈 {symbol}: Got {len(hist)} new data points to process")
-            else:
-                print(f"✓ {symbol}: No new data since {last_daily_date}")
-                # Return cached data + indicators
-                cached_rows = db.execute('''
-                    SELECT date, close, ema_22, ema_50, ema_100, ema_200, 
-                           macd_line, macd_signal, macd_histogram, rsi, 
-                           stochastic, stoch_d, atr, force_index, kc_upper, kc_middle, kc_lower
-                    FROM stock_indicators_daily 
-                    WHERE symbol = ? 
-                    ORDER BY date ASC
-                ''', (symbol,)).fetchall()
-
-                if cached_rows:
-                    hist = pd.DataFrame([dict(row) for row in cached_rows])
-                    hist['Date'] = pd.to_datetime(hist['date'])
-                    hist.set_index('Date', inplace=True)
-                    hist = hist.drop('date', axis=1)
-                    hist = hist[['close', 'ema_22', 'ema_50', 'ema_100', 'ema_200',
-                                 'macd_line', 'macd_signal', 'macd_histogram', 'rsi',
-                                 'stochastic', 'stoch_d', 'atr', 'force_index',
-                                 'kc_upper', 'kc_middle', 'kc_lower']]
-                    db.close()
-
-                    # Get contract info
-                    info = client.get_contract_info(conid)
-                    name = info.get('company_name', symbol) if info else symbol
-                    sector = info.get(
-                        'industry', 'Unknown') if info else 'Unknown'
-
-                    return {
-                        'symbol': symbol,
-                        'name': name,
-                        'sector': sector,
-                        'history': hist,
-                        'info': info or {},
-                        'conid': conid,
-                        'from_cache': True
-                    }
-    else:
-        print(f"🔄 {symbol}: No valid indicator cache, fetching full 2-year data...")
-        hist = client.get_historical_data(conid, period=period, bar='1d')
-        needs_full_calc = True
-
-    # Handle fetch failure
-    if hist is None or hist.empty or len(hist) < 30:
-        print(
-            f"❌ {symbol}: Insufficient historical data ({len(hist) if hist is not None else 0} bars)")
-        db.close()
-        return None
-
-    # At this point, we have new data to process
-    # Load previous indicator values for incremental calculation
-    if use_indicator_cache and not needs_full_calc:
-        print(
-            f"📋 {symbol}: Loading previous indicators for incremental calculation...")
-        last_row = db.execute('''
-            SELECT ema_22, ema_50, ema_100, ema_200, macd_line, macd_signal 
-            FROM stock_indicators_daily 
+    # Try to use cached data
+    if use_cache:
+        cached_rows = db.execute('''
+            SELECT date, open, high, low, close, volume 
+            FROM stock_historical_data 
             WHERE symbol = ? 
-            ORDER BY date DESC 
-            LIMIT 1
-        ''', (symbol,)).fetchone()
+            ORDER BY date ASC
+        ''', (symbol,)).fetchall()
 
-        if last_row:
-            cached_indicators = dict(last_row)
-            print(f"✓ {symbol}: Loaded previous indicator values")
+        if cached_rows and len(cached_rows) >= 30:
+            hist = pd.DataFrame([
+                {
+                    'Date': row['date'],
+                    'Open': row['open'],
+                    'High': row['high'],
+                    'Low': row['low'],
+                    'Close': row['close'],
+                    'Volume': row['volume']
+                }
+                for row in cached_rows
+            ])
+            hist['Date'] = pd.to_datetime(hist['Date'])
+            hist.set_index('Date', inplace=True)
+            print(f"✓ {symbol}: Loaded {len(hist)} cached bars")
 
-    # If full calculation needed, get all OHLCV first
-    if needs_full_calc:
-        print(f"💾 {symbol}: Caching {len(hist)} OHLCV records to database...")
+    # If cache miss or insufficient data, fetch from IBKR
+    if hist is None or hist.empty or len(hist) < 30:
+        print(f"🔄 {symbol}: Fetching fresh data from IBKR...")
+        hist = client.get_historical_data(conid, period=period, bar='1d')
+
+        if hist is None or hist.empty or len(hist) < 30:
+            print(f"❌ {symbol}: Insufficient historical data")
+            db.close()
+            return None
+
+        # Cache the OHLCV data
+        print(f"💾 {symbol}: Caching {len(hist)} OHLCV records...")
         for date, row in hist.iterrows():
             db.execute('''
                 INSERT OR REPLACE INTO stock_historical_data 
@@ -442,66 +388,6 @@ def fetch_stock_data(symbol: str, period: str = '2y') -> Optional[Dict]:
         ''', (symbol, datetime.now().isoformat(), earliest_date, latest_date, len(hist)))
         db.commit()
         print(f"✓ {symbol}: OHLCV data cached successfully")
-    else:
-        # Save new OHLCV data
-        if len(hist) > 0:
-            print(f"💾 {symbol}: Caching {len(hist)} new OHLCV records...")
-            for date, row in hist.iterrows():
-                db.execute('''
-                    INSERT OR REPLACE INTO stock_historical_data 
-                    (symbol, date, open, high, low, close, volume)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    symbol,
-                    date.strftime('%Y-%m-%d'),
-                    float(row['Open']),
-                    float(row['High']),
-                    float(row['Low']),
-                    float(row['Close']),
-                    int(row['Volume'])
-                ))
-
-            db.execute('''
-                UPDATE stock_data_sync 
-                SET latest_date = ?, record_count = (
-                    SELECT COUNT(*) FROM stock_historical_data WHERE symbol = ?
-                ), last_updated = ?
-                WHERE symbol = ?
-            ''', (
-                hist.index.max().strftime('%Y-%m-%d'),
-                symbol,
-                datetime.now().isoformat(),
-                symbol
-            ))
-            db.commit()
-
-    # Prepare full OHLCV history for indicator calculation
-    # Load all cached OHLCV if we're doing incremental calculation
-    if not needs_full_calc:
-        all_rows = db.execute('''
-            SELECT date, open, high, low, close, volume 
-            FROM stock_historical_data 
-            WHERE symbol = ? 
-            ORDER BY date ASC
-        ''', (symbol,)).fetchall()
-
-        if all_rows:
-            hist_full = pd.DataFrame([
-                {
-                    'Date': row['date'],
-                    'Open': row['open'],
-                    'High': row['high'],
-                    'Low': row['low'],
-                    'Close': row['close'],
-                    'Volume': row['volume']
-                }
-                for row in all_rows
-            ])
-            hist_full['Date'] = pd.to_datetime(hist_full['Date'])
-            hist_full.set_index('Date', inplace=True)
-            hist = hist_full
-            print(
-                f"📊 {symbol}: Using {len(hist)} total records for indicator calculation")
 
     # Get contract info
     info = client.get_contract_info(conid)
@@ -522,9 +408,7 @@ def fetch_stock_data(symbol: str, period: str = '2y') -> Optional[Dict]:
         'history': hist,
         'info': info or {},
         'snapshot': snapshot,
-        'conid': conid,
-        'cached_indicators': cached_indicators,
-        'is_incremental': not needs_full_calc and use_indicator_cache
+        'conid': conid
     }
 
 

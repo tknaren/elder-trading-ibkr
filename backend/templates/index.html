@@ -374,8 +374,8 @@
                         <div class="space-y-2 bg-[#1f2937] rounded-lg p-4">
                             <div class="flex justify-between"><span class="text-gray-400">Entry</span><span class="font-mono text-blue-400">$${stock.entry?.toFixed(2)}</span></div>
                             <div class="flex justify-between"><span class="text-gray-400">Stop Loss</span><span class="font-mono text-red-400">$${stock.stop_loss?.toFixed(2)}</span></div>
-                            <div class="flex justify-between"><span class="text-gray-400">Target 1</span><span class="font-mono text-green-400">$${stock.target_1?.toFixed(2)}</span></div>
-                            <div class="flex justify-between"><span class="text-gray-400">Target 2</span><span class="font-mono text-green-400">$${stock.target_2?.toFixed(2)}</span></div>
+                            <div class="flex justify-between"><span class="text-gray-400">Target 1</span><span class="font-mono text-green-400">$${stock.target_b?.toFixed(2)}</span></div>
+                            <div class="flex justify-between"><span class="text-gray-400">Target 2</span><span class="font-mono text-green-400">$${stock.target_a?.toFixed(2)}</span></div>
                             <div class="flex justify-between"><span class="text-gray-400">Risk</span><span class="font-mono">${stock.risk_percent?.toFixed(1)}%</span></div>
                         </div>
                     </div>
@@ -405,7 +405,7 @@
             current_market_price: stock.price,
             entry_price: stock.entry,
             stop_loss: stock.stop_loss,
-            target_price: stock.target_1,
+            target_price: stock.target_b,  // Target 1 = Target B
             // Use Keltner Channel values (KC 20,10,1) from screener
             upper_channel: stock.kc_upper || (stock.price * 1.03),
             lower_channel: stock.kc_lower || (stock.price * 0.97),
