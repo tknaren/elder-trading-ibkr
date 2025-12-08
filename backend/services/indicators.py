@@ -423,14 +423,16 @@ def calculate_all_indicators(highs: pd.Series, lows: pd.Series,
 GRADING_CRITERIA = """
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                    ELDER TRIPLE SCREEN - GRADING CRITERIA                     ║
-║                           (Revised Scoring System)                            ║
+║                              (Version 2.1)                                    ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                               ║
 ║  SCREEN 1 (Weekly Trend) - Strategic Direction [MANDATORY GATE]              ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
-║  ✓ 22-Week EMA Slope: Rising = Bullish trend (look for longs)                ║
-║  ✓ Weekly MACD-H: Rising = Bulls gaining strength                            ║
-║  ✗ Both EMA falling AND MACD-H falling = STAY OUT (bearish)                  ║
+║  ALL THREE conditions MUST be true to proceed:                               ║
+║  ✓ 22-Week EMA Slope: Rising                                                 ║
+║  ✓ Weekly MACD-H: Rising (slope, not value)                                  ║
+║  ✓ Weekly Impulse: GREEN (permission to buy)                                 ║
+║  ✗ If ANY condition fails = STAY OUT (no long trades)                        ║
 ║                                                                               ║
 ║  SCREEN 2 (Daily Entry) - Tactical Timing                                     ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
@@ -438,8 +440,9 @@ GRADING_CRITERIA = """
 ║  ✓ RSI < 20: Oversold = Strong entry | RSI 20-40: Neutral-Oversold           ║
 ║  ✓ Price near 22-EMA: Buying value, not chasing                              ║
 ║  ✓ Price near Lower Keltner Channel: Support zone                            ║
-║  ✓ Impulse RED or BLUE-after-RED: Permission to buy                          ║
-║  ✗ Impulse GREEN: DO NOT BUY (wait for pullback)                             ║
+║  ✓ Daily Impulse RED: Bears retreating, permission to buy                    ║
+║  ✓ Daily Impulse BLUE after RED: Transition = excellent entry                ║
+║  ✗ Daily Impulse GREEN: DO NOT BUY (wait for pullback)                       ║
 ║                                                                               ║
 ║  SCREEN 3 (Entry Technique) - Execution                                       ║
 ║  ─────────────────────────────────────────────────────────────────────────── ║
@@ -456,8 +459,8 @@ GRADING_CRITERIA = """
 ║  +1 │ RSI 20-40 (neutral to oversold)                                        ║
 ║  +1 │ Price at or below 22-EMA (value zone)                                  ║
 ║  +1 │ Bullish divergence (MACD or RSI)                                       ║
-║  +1 │ Impulse RED (permission to buy)                                        ║
-║  +2 │ Impulse BLUE after RED (strong transition signal)                      ║
+║  +1 │ Daily Impulse RED (permission to buy)                                  ║
+║  +2 │ Daily Impulse BLUE after RED (strong transition signal)                ║
 ║  +2 │ Price near lower Keltner Channel                                       ║
 ║  +2 │ False downside breakout                                                ║
 ║  +2 │ Strong bullish pattern (Engulfing, Tweezer, Three Candle Swing)        ║
@@ -471,10 +474,12 @@ GRADING_CRITERIA = """
 ║             → PREPARE: Good setup developing, set alerts                     ║
 ║  👀 C-WATCH: Signal Strength 1-4                                              ║
 ║             → WATCH: Early stage, monitor for improvement                    ║
-║  🔴 AVOID:   Signal Strength ≤ 0 OR Impulse GREEN                             ║
+║  🔴 AVOID:   Signal Strength ≤ 0 OR Daily Impulse GREEN                       ║
 ║             → NO TRADE: Wait for pullback or conditions to improve           ║
 ║                                                                               ║
-║  KEY RULE: GREEN = Already rallying, wait for RED/BLUE pullback to buy       ║
+║  KEY RULES:                                                                   ║
+║  • Weekly Impulse GREEN = Gate to proceed (required)                         ║
+║  • Daily Impulse GREEN = DO NOT BUY (wait for RED/BLUE pullback)             ║
 ║                                                                               ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
