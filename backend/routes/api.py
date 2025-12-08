@@ -23,6 +23,23 @@ from services.ibkr_client import check_connection, get_client
 api = Blueprint('api', __name__, url_prefix='/api')
 
 
+def sanitize_for_json(obj):
+    """
+    Recursively sanitize all string values to be JSON-safe.
+    Handles apostrophes and other special characters.
+    """
+    if isinstance(obj, dict):
+        return {key: sanitize_for_json(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_for_json(item) for item in obj]
+    elif isinstance(obj, str):
+        # Ensure the string is properly encoded for JSON
+        # json.dumps will handle escaping, but let's ensure no control chars
+        return obj.encode('utf-8', errors='replace').decode('utf-8')
+    else:
+        return obj
+
+
 def get_db():
     """Get database connection for current request"""
     if 'db' not in g:
@@ -117,6 +134,9 @@ def weekly_screener():
     results['week_start'] = week_start.isoformat()
     results['week_end'] = week_end.isoformat()
 
+    # Sanitize results for JSON serialization
+    results = sanitize_for_json(results)
+
     return jsonify(results)
 
 
@@ -171,6 +191,9 @@ def daily_screener():
     scan_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
     results['scan_id'] = scan_id
     results['weekly_scan_id'] = weekly_scan_id
+
+    # Sanitize results for JSON serialization
+    results = sanitize_for_json(results)
 
     return jsonify(results)
 

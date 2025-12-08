@@ -287,7 +287,63 @@ class Database:
             );
             CREATE INDEX IF NOT EXISTS idx_symbol_date ON stock_historical_data(symbol, date);
 
-            -- Track last update for each stock
+            -- Cached Indicator Values (Daily)
+            CREATE TABLE IF NOT EXISTS stock_indicators_daily (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                date TEXT NOT NULL,
+                close REAL NOT NULL,
+                ema_22 REAL,
+                ema_50 REAL,
+                ema_100 REAL,
+                ema_200 REAL,
+                macd_line REAL,
+                macd_signal REAL,
+                macd_histogram REAL,
+                rsi REAL,
+                stochastic REAL,
+                stoch_d REAL,
+                atr REAL,
+                force_index REAL,
+                kc_upper REAL,
+                kc_middle REAL,
+                kc_lower REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(symbol, date)
+            );
+            CREATE INDEX IF NOT EXISTS idx_daily_symbol_date ON stock_indicators_daily(symbol, date);
+
+            -- Cached Indicator Values (Weekly - resampled)
+            CREATE TABLE IF NOT EXISTS stock_indicators_weekly (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                week_end_date TEXT NOT NULL,
+                close REAL NOT NULL,
+                ema_22 REAL,
+                ema_50 REAL,
+                ema_100 REAL,
+                ema_200 REAL,
+                macd_line REAL,
+                macd_signal REAL,
+                macd_histogram REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(symbol, week_end_date)
+            );
+            CREATE INDEX IF NOT EXISTS idx_weekly_symbol_date ON stock_indicators_weekly(symbol, week_end_date);
+
+            -- Track indicator calculation progress
+            CREATE TABLE IF NOT EXISTS stock_indicator_sync (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL UNIQUE,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_daily_date TEXT,
+                last_weekly_date TEXT,
+                daily_record_count INTEGER DEFAULT 0,
+                weekly_record_count INTEGER DEFAULT 0,
+                ohlcv_latest_date TEXT
+            );
+
+            -- Track last update for each stock (OHLCV data)
             CREATE TABLE IF NOT EXISTS stock_data_sync (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 symbol TEXT NOT NULL UNIQUE,

@@ -251,7 +251,7 @@
                                             <td class="p-3 text-right font-mono ${r.rsi<30?'text-green-400':r.rsi>70?'text-red-400':'text-gray-300'}">${r.rsi?.toFixed(0)}</td>
                                             <td class="p-3 text-right font-mono ${r.price_vs_ema<=0?'text-green-400':r.price_vs_ema>3?'text-red-400':'text-yellow-400'}">${r.price_vs_ema>=0?'+':''}${r.price_vs_ema?.toFixed(1)}%</td>
                                             <td class="p-3 text-center">
-                                                <button onclick='showDetail(${JSON.stringify(r).replace(/'/g,"\\'")})'class="px-2 py-1 bg-gray-700 rounded text-xs hover:bg-blue-600">Details</button>
+                                                <button onclick="showDetail(this.dataset.stock)" class="px-2 py-1 bg-gray-700 rounded text-xs hover:bg-blue-600" data-stock='${JSON.stringify(r).replace(/'/g, "&apos;")}'>Details</button>
                                             </td>
                                         </tr>
                                     `).join('')}
@@ -305,7 +305,9 @@
         }
     }
 
-    function showDetail(stock) {
+    function showDetail(stockData) {
+        // Parse JSON if it's a string (from data attribute)
+        let stock = typeof stockData === 'string' ? JSON.parse(stockData) : stockData;
         selectedStock = stock;  // Store for trade bill creation
         document.getElementById('modal').classList.remove('hidden');
         const patterns = stock.pattern_names || [];
