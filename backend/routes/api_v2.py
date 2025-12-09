@@ -656,18 +656,22 @@ def get_workflow_status():
 @api_v2.route('/backtest/run', methods=['POST'])
 def run_backtest_endpoint():
     """
-    Run backtest for a single symbol
+    Run backtest for a single symbol using Elder's practical methodology
     
     Body:
     {
         "symbol": "AAPL",
         "market": "US",
-        "lookback_days": 180,
+        "lookback_days": 365,
         "initial_capital": 100000,
-        "risk_per_trade_pct": 1.0,
+        "risk_per_trade_pct": 2.0,
         "rr_target": 1.5,
-        "min_grade": "B"
+        "min_score": 3
     }
+    
+    Core Logic: Weekly UP + Daily DOWN = Go Long
+    - Weekly UP: EMA rising OR MACD-H rising OR Price > EMA
+    - Daily DOWN: Force Index < 0 OR Stochastic < 50 OR RSI < 50
     """
     from services.backtesting import run_backtest
     
@@ -680,11 +684,11 @@ def run_backtest_endpoint():
     result = run_backtest(
         symbol=symbol,
         market=data.get('market', 'US'),
-        lookback_days=data.get('lookback_days', 180),
+        lookback_days=data.get('lookback_days', 365),
         initial_capital=data.get('initial_capital', 100000),
-        risk_per_trade_pct=data.get('risk_per_trade_pct', 1.0),
+        risk_per_trade_pct=data.get('risk_per_trade_pct', 2.0),
         rr_target=data.get('rr_target', 1.5),
-        min_grade=data.get('min_grade', 'B')
+        min_score=data.get('min_score', 3)
     )
     
     if result:
@@ -701,11 +705,11 @@ def run_portfolio_backtest_endpoint():
     {
         "symbols": ["AAPL", "MSFT", "GOOGL"],
         "market": "US",
-        "lookback_days": 180,
+        "lookback_days": 365,
         "initial_capital": 100000,
-        "risk_per_trade_pct": 1.0,
+        "risk_per_trade_pct": 2.0,
         "rr_target": 1.5,
-        "min_grade": "B"
+        "min_score": 3
     }
     """
     from services.backtesting import run_portfolio_backtest
@@ -719,11 +723,11 @@ def run_portfolio_backtest_endpoint():
     result = run_portfolio_backtest(
         symbols=symbols,
         market=data.get('market', 'US'),
-        lookback_days=data.get('lookback_days', 180),
+        lookback_days=data.get('lookback_days', 365),
         initial_capital=data.get('initial_capital', 100000),
-        risk_per_trade_pct=data.get('risk_per_trade_pct', 1.0),
+        risk_per_trade_pct=data.get('risk_per_trade_pct', 2.0),
         rr_target=data.get('rr_target', 1.5),
-        min_grade=data.get('min_grade', 'B')
+        min_score=data.get('min_score', 3)
     )
     
     return jsonify(result)
@@ -733,18 +737,18 @@ def run_portfolio_backtest_endpoint():
 def quick_backtest(symbol):
     """
     Quick backtest for a single symbol with default parameters
-    Uses 180 days lookback, 1% risk, 1.5 R:R, Grade B minimum
+    Uses 365 days lookback, 2% risk, 1.5 R:R, min_score 3
     """
     from services.backtesting import run_backtest
     
     result = run_backtest(
         symbol=symbol,
         market='US',
-        lookback_days=180,
+        lookback_days=365,
         initial_capital=100000,
-        risk_per_trade_pct=1.0,
+        risk_per_trade_pct=2.0,
         rr_target=1.5,
-        min_grade='B'
+        min_score=3
     )
     
     if result:
@@ -752,13 +756,123 @@ def quick_backtest(symbol):
         return jsonify({
             'symbol': result['symbol'],
             'period': f"{result['period_days']} days",
+            'data_bars': result.get('data_bars', 0),
+            'total_signals': result.get('total_signals', 0),
             'total_trades': result['total_trades'],
+            'winning_trades': result['winning_trades'],
+            'losing_trades': result['losing_trades'],
             'win_rate': result['win_rate'],
             'total_pnl': result['total_pnl'],
+            'return_percent': result.get('return_percent', 0),
             'profit_factor': result['profit_factor'],
-            'max_drawdown': result['max_drawdown'],
             'expectancy': result['expectancy'],
+            'max_drawdown': result['max_drawdown'],
+            'avg_days_held': result.get('avg_days_held', 0),
+            'initial_capital': result.get('initial_capital', 100000),
+            'final_capital': result.get('final_capital', 100000),
             'trades': result['trades'][:10],  # Last 10 trades for preview
             'full_result_available': True
         })
     return jsonify({'error': f'Could not run backtest for {symbol}'}), 500
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HISTORICAL SCREENER ENDPOINTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+@api_v2.route('/historical-screener/stocks', methods=['GET'])
+def get_available_stocks():
+    """
+    Get list of available stocks for screening
+    """
+    market = request.args.get('market', 'US')
+    
+    from services.historical_screener import get_stock_list
+    stocks = get_stock_list(market)
+    
+    return jsonify({
+        'market': market,
+        'stocks': stocks,
+        'count': len(stocks)
+    })
+
+
+@api_v2.route('/historical-screener/run', methods=['POST'])
+def run_historical_screener():
+    """
+    Run historical screener to find signals
+    
+    Request body:
+    {
+        "symbols": ["AAPL", "MSFT", ...],  // or "all" for all stocks
+        "lookback_days": 180,
+        "min_score": 5,
+        "market": "US"
+    }
+    
+    Returns signals sorted by date (newest first)
+    """
+    data = request.get_json() or {}
+    
+    symbols = data.get('symbols', [])
+    lookback_days = data.get('lookback_days', 180)
+    min_score = data.get('min_score', 5)
+    market = data.get('market', 'US')
+    
+    from services.historical_screener import run_historical_screener, get_stock_list
+    
+    # Handle "all" or empty symbols
+    if not symbols or symbols == 'all' or (isinstance(symbols, list) and 'all' in symbols):
+        symbols = get_stock_list(market)
+    
+    # Validate
+    if lookback_days < 30:
+        lookback_days = 30
+    if lookback_days > 365:
+        lookback_days = 365
+    
+    if min_score < 1:
+        min_score = 1
+    if min_score > 10:
+        min_score = 10
+    
+    try:
+        result = run_historical_screener(
+            symbols=symbols,
+            lookback_days=lookback_days,
+            min_score=min_score
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@api_v2.route('/historical-screener/single/<symbol>', methods=['GET'])
+def scan_single_stock_history(symbol):
+    """
+    Scan a single stock's history
+    """
+    lookback_days = request.args.get('lookback_days', 180, type=int)
+    min_score = request.args.get('min_score', 5, type=int)
+    
+    from services.historical_screener import scan_stock_historical
+    
+    try:
+        signals = scan_stock_historical(
+            symbol=symbol.upper(),
+            lookback_days=lookback_days,
+            min_score=min_score
+        )
+        
+        return jsonify({
+            'symbol': symbol.upper(),
+            'signals': signals,
+            'count': len(signals),
+            'lookback_days': lookback_days,
+            'min_score': min_score
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

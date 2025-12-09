@@ -18,7 +18,7 @@ from services.ibkr_client import (
 from services.backtesting import (
     run_backtest,
     run_portfolio_backtest,
-    BacktestEngine,
+    PracticalBacktestEngine,
     BacktestResult,
     BacktestTrade
 )

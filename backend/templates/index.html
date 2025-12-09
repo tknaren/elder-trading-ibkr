@@ -56,7 +56,7 @@
 
     const tabs = [
         {id:'screener', icon:'🔍', label:'Screener'},
-        {id:'backtest', icon:'📊', label:'Backtest'},
+        {id:'backtest', icon:'📊', label:'Signal Scanner'},
         {id:'trade-bill', icon:'💼', label:'Trade Bill'},
         {id:'trade-bills', icon:'📋', label:'Trade Bills'},
         {id:'journal-dashboard', icon:'📈', label:'Dashboard'},
@@ -662,118 +662,211 @@
         toast(`Stock ${symbol} selected!`, 'success');
     }
 
-    // ========== BACKTEST ==========
+    // ========== HISTORICAL SCREENER (formerly Backtest) ==========
+    let historicalStocks = [];
+    let selectedStocks = new Set();
+    
     async function backtestView() {
+        // Load available stocks
+        try {
+            const resp = await fetch('/api/v2/historical-screener/stocks?market=US');
+            const data = await resp.json();
+            historicalStocks = data.stocks || [];
+        } catch(e) {
+            historicalStocks = ['AAPL','MSFT','GOOGL','AMZN','NVDA','META','TSLA','AMD','AVGO','NFLX'];
+        }
+        
         const html = `
             <div class="space-y-6">
-                <h2 class="text-2xl font-bold text-blue-400">📊 Strategy Backtester</h2>
+                <h2 class="text-2xl font-bold text-blue-400">📊 Historical Signal Scanner</h2>
+                <p class="text-gray-400">Scan historical data to find Elder trading signals for manual verification</p>
                 
                 <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
-                    <h3 class="font-bold text-lg mb-4 text-blue-300">⚙️ Backtest Configuration</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <h3 class="font-bold text-lg mb-4 text-blue-300">⚙️ Scanner Configuration</h3>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Left: Stock Selection -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Symbol</label>
-                            <input type="text" id="bt-symbol" placeholder="Enter symbol (e.g., AAPL)" 
-                                   class="w-full bg-[#1f2937] border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
-                            <div id="bt-symbol-suggestions" class="mt-2 max-h-40 overflow-y-auto"></div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Select Stocks (NASDAQ 100)</label>
+                            <div class="flex gap-2 mb-2">
+                                <button onclick="selectAllStocks()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded">Select All</button>
+                                <button onclick="clearAllStocks()" class="text-xs bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded">Clear All</button>
+                                <button onclick="selectTopStocks()" class="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded">Top 20</button>
+                            </div>
+                            <div class="bg-[#1f2937] border border-gray-600 rounded-lg p-3 max-h-64 overflow-y-auto">
+                                <input type="text" id="stock-search" placeholder="Search stocks..." 
+                                       class="w-full bg-[#111827] border border-gray-600 rounded px-2 py-1 mb-2 text-white text-sm"
+                                       oninput="filterStockList()">
+                                <div id="stock-list" class="grid grid-cols-4 gap-1 text-xs">
+                                    ${historicalStocks.map(s => `
+                                        <label class="flex items-center space-x-1 cursor-pointer hover:bg-gray-700 p-1 rounded stock-item" data-symbol="${s}">
+                                            <input type="checkbox" class="stock-checkbox rounded" value="${s}" onchange="toggleStock('${s}')">
+                                            <span class="text-gray-300">${s}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1"><span id="selected-count">0</span> stocks selected</p>
                         </div>
                         
-                        <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Market</label>
-                            <select id="bt-market" class="w-full bg-[#1f2937] border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
-                                <option value="us">US Market</option>
-                                <option value="india">India Market</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Lookback Period (days)</label>
-                            <input type="number" id="bt-lookback" value="90" min="30" max="365"
-                                   class="w-full bg-[#1f2937] border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
+                        <!-- Right: Parameters -->
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Lookback Period (days)</label>
+                                <input type="number" id="hs-lookback" value="180" min="30" max="365"
+                                       class="w-full bg-[#1f2937] border border-gray-600 rounded-lg px-3 py-2 text-white">
+                                <p class="text-xs text-gray-500 mt-1">Scan last N days for signals (30-365)</p>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Minimum Score</label>
+                                <select id="hs-min-score" class="w-full bg-[#1f2937] border border-gray-600 rounded-lg px-3 py-2 text-white">
+                                    <option value="7">7+ (A-Trades only)</option>
+                                    <option value="5" selected>5+ (A & B-Trades)</option>
+                                    <option value="3">3+ (Include C-Trades)</option>
+                                    <option value="1">1+ (All signals)</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Market</label>
+                                <select id="hs-market" class="w-full bg-[#1f2937] border border-gray-600 rounded-lg px-3 py-2 text-white" onchange="changeMarket()">
+                                    <option value="US">US Market (NASDAQ 100)</option>
+                                    <option value="India">India Market (NIFTY 100)</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     
+                    <!-- Indicator Columns to Show -->
                     <div class="mt-6 pt-6 border-t border-gray-600">
-                        <h4 class="font-semibold text-blue-300 mb-4">📈 Indicator Configuration</h4>
-                        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <h4 class="font-semibold text-blue-300 mb-3">📊 Columns to Display</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 text-sm">
                             <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
-                                <input type="checkbox" id="bt-ema22" checked class="rounded">
-                                <span>EMA 22</span>
+                                <input type="checkbox" id="col-price" checked class="rounded col-toggle">
+                                <span>Price</span>
                             </label>
                             <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
-                                <input type="checkbox" id="bt-ema50" checked class="rounded">
-                                <span>EMA 50</span>
+                                <input type="checkbox" id="col-score" checked class="rounded col-toggle">
+                                <span>Score</span>
                             </label>
                             <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
-                                <input type="checkbox" id="bt-ema100" checked class="rounded">
-                                <span>EMA 100</span>
+                                <input type="checkbox" id="col-grade" checked class="rounded col-toggle">
+                                <span>Grade</span>
                             </label>
                             <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
-                                <input type="checkbox" id="bt-ema200" checked class="rounded">
-                                <span>EMA 200</span>
+                                <input type="checkbox" id="col-screen1" checked class="rounded col-toggle">
+                                <span>Screen 1</span>
                             </label>
                             <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
-                                <input type="checkbox" id="bt-macd" checked class="rounded">
-                                <span>MACD</span>
+                                <input type="checkbox" id="col-screen2" checked class="rounded col-toggle">
+                                <span>Screen 2</span>
                             </label>
                             <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
-                                <input type="checkbox" id="bt-force-index" checked class="rounded">
-                                <span>Force Index</span>
+                                <input type="checkbox" id="col-macd-h" checked class="rounded col-toggle">
+                                <span>MACD-H (+)</span>
                             </label>
                             <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
-                                <input type="checkbox" id="bt-stochastic" checked class="rounded">
-                                <span>Stochastic</span>
+                                <input type="checkbox" id="col-macd-line" checked class="rounded col-toggle">
+                                <span>MACD Line (+)</span>
                             </label>
                             <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
-                                <input type="checkbox" id="bt-rsi" checked class="rounded">
-                                <span>RSI</span>
+                                <input type="checkbox" id="col-ema" checked class="rounded col-toggle">
+                                <span>EMA (+)</span>
                             </label>
                             <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
-                                <input type="checkbox" id="bt-adx" checked class="rounded">
-                                <span>ADX</span>
+                                <input type="checkbox" id="col-kc" checked class="rounded col-toggle">
+                                <span>KC (+)</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="col-fi" checked class="rounded col-toggle">
+                                <span>Force Idx (+)</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="col-stoch" checked class="rounded col-toggle">
+                                <span>Stoch (+)</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="col-pattern" class="rounded col-toggle">
+                                <span>Pattern (+)</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="col-weekly-vals" class="rounded col-toggle">
+                                <span>Weekly Values</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="col-daily-vals" class="rounded col-toggle">
+                                <span>Daily Values</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="col-entry" class="rounded col-toggle">
+                                <span>Entry/Stop/Target</span>
                             </label>
                         </div>
                     </div>
                     
                     <div class="mt-6 flex gap-3">
-                        <button onclick="runBacktest()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition">
-                            🚀 Run Backtest
+                        <button onclick="runHistoricalScreener()" id="run-screener-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition">
+                            🔍 Scan Historical Data
                         </button>
-                        <button onclick="resetBacktest()" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition">
+                        <button onclick="resetHistoricalScreener()" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition">
                             ↻ Reset
+                        </button>
+                        <button onclick="exportToCSV()" id="export-btn" style="display:none;" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition">
+                            📥 Export CSV
                         </button>
                     </div>
                 </div>
                 
-                <div id="backtest-results" style="display:none;" class="space-y-6">
+                <!-- Results Section -->
+                <div id="hs-results" style="display:none;" class="space-y-6">
                     
+                    <!-- Summary Stats -->
                     <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
-                        <h3 class="font-bold text-lg mb-4 text-green-400">📈 Backtest Statistics</h3>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="bt-stats-container">
+                        <h3 class="font-bold text-lg mb-4 text-green-400">📈 Scan Summary</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-5 gap-4" id="hs-summary">
                         </div>
                     </div>
                     
-                    <div class="bg-[#111827] rounded-xl p-6 border border-gray-700 overflow-x-auto">
-                        <h3 class="font-bold text-lg mb-4 text-blue-400">📋 Trade History</h3>
-                        <table class="w-full text-sm">
-                            <thead class="border-b border-gray-600">
-                                <tr class="text-left text-gray-300">
-                                    <th class="pb-2 px-2">Date</th>
-                                    <th class="pb-2 px-2">Entry</th>
-                                    <th class="pb-2 px-2">Exit</th>
-                                    <th class="pb-2 px-2">Status</th>
-                                    <th class="pb-2 px-2">P&L</th>
-                                </tr>
-                            </thead>
-                            <tbody id="bt-trades-container">
-                            </tbody>
-                        </table>
+                    <!-- Signals Table -->
+                    <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-lg text-blue-400">📋 Historical Signals</h3>
+                            <div class="flex gap-2">
+                                <input type="text" id="signal-filter" placeholder="Filter by symbol..." 
+                                       class="bg-[#1f2937] border border-gray-600 rounded px-3 py-1 text-white text-sm w-40"
+                                       oninput="filterSignals()">
+                                <select id="grade-filter" class="bg-[#1f2937] border border-gray-600 rounded px-2 py-1 text-white text-sm" onchange="filterSignals()">
+                                    <option value="">All Grades</option>
+                                    <option value="A">A Only</option>
+                                    <option value="B">B Only</option>
+                                    <option value="C">C Only</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm" id="signals-table">
+                                <thead class="border-b border-gray-600 bg-[#1f2937] sticky top-0">
+                                    <tr class="text-left text-gray-300" id="signals-header">
+                                    </tr>
+                                </thead>
+                                <tbody id="signals-body" class="divide-y divide-gray-700">
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="pagination" class="mt-4 flex justify-center gap-2">
+                        </div>
                     </div>
                 </div>
             </div>
         `;
         return html;
     }
+    
+    // Historical Screener data
+    let allSignals = [];
+    let currentPage = 1;
+    const pageSize = 50;
 
     // ========== CRITERIA ==========
     function criteriaView() {
@@ -2095,143 +2188,321 @@
         await switchTab('favorites');
     }
 
-    // ========== BACKTEST ==========
-    // Symbol typeahead for backtest
-    document.addEventListener('input', async function(e) {
-        if (e.target.id === 'bt-symbol') {
-            const query = e.target.value.trim();
-            if (query.length < 1) {
-                document.getElementById('bt-symbol-suggestions').innerHTML = '';
-                return;
-            }
-            try {
-                const response = await fetch('/api/backtest/available-stocks');
-                const data = await response.json();
-                const stocks = data.stocks.filter(s => 
-                    s.toUpperCase().includes(query.toUpperCase())
-                ).slice(0, 10);
-                
-                const html = stocks.map(s => {
-                    return '<div onclick="selectBacktestSymbol(\'' + s + '\')" class="p-2 bg-[#1f2937] border-b border-gray-600 cursor-pointer hover:bg-blue-900/30">' + s + '</div>';
-                }).join('');
-                document.getElementById('bt-symbol-suggestions').innerHTML = html;
-            } catch (e) {
-                console.error('Error fetching stocks:', e);
-            }
+    // ========== HISTORICAL SCREENER FUNCTIONS ==========
+    
+    function toggleStock(symbol) {
+        if (selectedStocks.has(symbol)) {
+            selectedStocks.delete(symbol);
+        } else {
+            selectedStocks.add(symbol);
         }
-    });
-
-    function selectBacktestSymbol(symbol) {
-        document.getElementById('bt-symbol').value = symbol;
-        document.getElementById('bt-symbol-suggestions').innerHTML = '';
+        updateSelectedCount();
     }
-
-    async function runBacktest() {
-        const symbol = document.getElementById('bt-symbol').value.trim().toUpperCase();
-        const market = document.getElementById('bt-market').value;
-        const lookback = parseInt(document.getElementById('bt-lookback').value);
-        
-        if (!symbol) {
-            toast('Please select a symbol', 'warning');
+    
+    function selectAllStocks() {
+        const checkboxes = document.querySelectorAll('.stock-checkbox');
+        checkboxes.forEach(cb => {
+            cb.checked = true;
+            selectedStocks.add(cb.value);
+        });
+        updateSelectedCount();
+    }
+    
+    function clearAllStocks() {
+        selectedStocks.clear();
+        const checkboxes = document.querySelectorAll('.stock-checkbox');
+        checkboxes.forEach(cb => cb.checked = false);
+        updateSelectedCount();
+    }
+    
+    function selectTopStocks() {
+        clearAllStocks();
+        const top20 = historicalStocks.slice(0, 20);
+        top20.forEach(s => {
+            selectedStocks.add(s);
+            const cb = document.querySelector(`.stock-checkbox[value="${s}"]`);
+            if (cb) cb.checked = true;
+        });
+        updateSelectedCount();
+    }
+    
+    function updateSelectedCount() {
+        const el = document.getElementById('selected-count');
+        if (el) el.textContent = selectedStocks.size;
+    }
+    
+    function filterStockList() {
+        const query = document.getElementById('stock-search').value.toLowerCase();
+        const items = document.querySelectorAll('.stock-item');
+        items.forEach(item => {
+            const symbol = item.dataset.symbol.toLowerCase();
+            item.style.display = symbol.includes(query) ? '' : 'none';
+        });
+    }
+    
+    async function changeMarket() {
+        const market = document.getElementById('hs-market').value;
+        try {
+            const resp = await fetch(`/api/v2/historical-screener/stocks?market=${market}`);
+            const data = await resp.json();
+            historicalStocks = data.stocks || [];
+            
+            // Rebuild stock list
+            const stockList = document.getElementById('stock-list');
+            stockList.innerHTML = historicalStocks.map(s => `
+                <label class="flex items-center space-x-1 cursor-pointer hover:bg-gray-700 p-1 rounded stock-item" data-symbol="${s}">
+                    <input type="checkbox" class="stock-checkbox rounded" value="${s}" onchange="toggleStock('${s}')">
+                    <span class="text-gray-300">${s}</span>
+                </label>
+            `).join('');
+            
+            clearAllStocks();
+        } catch(e) {
+            console.error('Error changing market:', e);
+        }
+    }
+    
+    async function runHistoricalScreener() {
+        if (selectedStocks.size === 0) {
+            toast('Please select at least one stock', 'warning');
             return;
         }
         
-        // Build indicator config
-        const config = {
-            ema22: document.getElementById('bt-ema22').checked,
-            ema50: document.getElementById('bt-ema50').checked,
-            ema100: document.getElementById('bt-ema100').checked,
-            ema200: document.getElementById('bt-ema200').checked,
-            macd: document.getElementById('bt-macd').checked,
-            force_index: document.getElementById('bt-force-index').checked,
-            stochastic: document.getElementById('bt-stochastic').checked,
-            rsi: document.getElementById('bt-rsi').checked,
-            adx: document.getElementById('bt-adx').checked
-        };
+        const symbols = Array.from(selectedStocks);
+        const lookback = parseInt(document.getElementById('hs-lookback').value) || 180;
+        const minScore = parseInt(document.getElementById('hs-min-score').value) || 5;
+        const market = document.getElementById('hs-market').value;
         
-        const btn = document.querySelector('button[onclick="runBacktest()"]');
+        const btn = document.getElementById('run-screener-btn');
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Scanning... (this may take a few minutes)';
         
         try {
-            btn.disabled = true;
-            btn.innerHTML = '⏳ Running...';
-            
-            const response = await fetch('/api/backtest/run', {
+            const response = await fetch('/api/v2/historical-screener/run', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({symbol, market, lookback_days: lookback, config})
+                body: JSON.stringify({symbols, lookback_days: lookback, min_score: minScore, market})
             });
             
             const result = await response.json();
             
             if (!response.ok) {
-                throw new Error(result.error || 'Backtest failed');
+                throw new Error(result.error || 'Scan failed');
             }
             
-            displayBacktestResults(result);
-            toast('Backtest completed!', 'success');
-        } catch (e) {
+            allSignals = result.signals || [];
+            currentPage = 1;
+            
+            displaySummary(result.summary, result.symbols_scanned, result.symbols_with_signals);
+            renderSignalsTable();
+            
+            document.getElementById('hs-results').style.display = 'block';
+            document.getElementById('export-btn').style.display = allSignals.length > 0 ? 'inline-block' : 'none';
+            
+            toast(`Scan complete! Found ${allSignals.length} signals`, 'success');
+        } catch(e) {
             toast('Error: ' + e.message, 'error');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '🚀 Run Backtest';
+            btn.innerHTML = '🔍 Scan Historical Data';
         }
     }
-
-    function displayBacktestResults(result) {
-        // Show results container
-        document.getElementById('backtest-results').style.display = 'block';
-        
-        // Populate statistics
-        const statsData = [
-            {label: 'Total Trades', value: result.stats.total_trades, icon: '📊'},
-            {label: 'Win Rate', value: result.stats.win_percentage.toFixed(1) + '%', icon: '✅'},
-            {label: 'Profit Factor', value: result.stats.profit_factor.toFixed(2), icon: '💰'},
-            {label: 'Avg Win', value: '$' + result.stats.avg_win.toFixed(2), icon: '📈'},
-            {label: 'Avg Loss', value: '$' + result.stats.avg_loss.toFixed(2), icon: '📉'},
-            {label: 'Expectancy', value: '$' + result.stats.expectancy.toFixed(2), icon: '🎯'},
-            {label: 'Total P&L', value: '$' + result.stats.total_pnl.toFixed(2), icon: '💵'},
-            {label: 'Consecutive Wins', value: result.stats.max_win_streak || 0, icon: '🔥'}
+    
+    function displaySummary(summary, scanned, withSignals) {
+        const summaryEl = document.getElementById('hs-summary');
+        const stats = [
+            {label: 'Total Signals', value: summary.total_signals, icon: '📊', color: 'text-blue-400'},
+            {label: 'A-Trades', value: summary.a_trades, icon: '⭐', color: 'text-yellow-400'},
+            {label: 'B-Trades', value: summary.b_trades, icon: '📈', color: 'text-green-400'},
+            {label: 'Avg Score', value: summary.avg_score, icon: '🎯', color: 'text-purple-400'},
+            {label: 'Stocks w/ Signals', value: `${withSignals}/${scanned}`, icon: '📋', color: 'text-cyan-400'}
         ];
         
-        const statsHtml = statsData.map(s => {
-            return '<div class="bg-[#1f2937] rounded-lg p-4 border border-gray-600">' +
-                '<div class="text-2xl mb-1">' + s.icon + '</div>' +
-                '<div class="text-gray-400 text-xs">' + s.label + '</div>' +
-                '<div class="text-lg font-bold text-blue-400">' + s.value + '</div>' +
-            '</div>';
-        }).join('');
+        summaryEl.innerHTML = stats.map(s => `
+            <div class="bg-[#1f2937] rounded-lg p-4 border border-gray-600 text-center">
+                <div class="text-2xl mb-1">${s.icon}</div>
+                <div class="text-gray-400 text-xs">${s.label}</div>
+                <div class="text-lg font-bold ${s.color}">${s.value}</div>
+            </div>
+        `).join('');
+    }
+    
+    function getVisibleColumns() {
+        return {
+            price: document.getElementById('col-price')?.checked,
+            score: document.getElementById('col-score')?.checked,
+            grade: document.getElementById('col-grade')?.checked,
+            screen1: document.getElementById('col-screen1')?.checked,
+            screen2: document.getElementById('col-screen2')?.checked,
+            macd_h: document.getElementById('col-macd-h')?.checked,
+            macd_line: document.getElementById('col-macd-line')?.checked,
+            ema: document.getElementById('col-ema')?.checked,
+            kc: document.getElementById('col-kc')?.checked,
+            fi: document.getElementById('col-fi')?.checked,
+            stoch: document.getElementById('col-stoch')?.checked,
+            pattern: document.getElementById('col-pattern')?.checked,
+            weekly_vals: document.getElementById('col-weekly-vals')?.checked,
+            daily_vals: document.getElementById('col-daily-vals')?.checked,
+            entry: document.getElementById('col-entry')?.checked
+        };
+    }
+    
+    function renderSignalsTable() {
+        const cols = getVisibleColumns();
+        const filtered = filterSignalsData();
+        const totalPages = Math.ceil(filtered.length / pageSize);
+        const start = (currentPage - 1) * pageSize;
+        const pageData = filtered.slice(start, start + pageSize);
         
-        document.getElementById('bt-stats-container').innerHTML = statsHtml;
+        // Build header
+        let headers = ['Symbol', 'Date'];
+        if (cols.price) headers.push('Price');
+        if (cols.score) headers.push('Score');
+        if (cols.grade) headers.push('Grade');
+        if (cols.screen1) headers.push('Scr1');
+        if (cols.screen2) headers.push('Scr2');
+        if (cols.macd_h) headers.push('MACD-H');
+        if (cols.macd_line) headers.push('MACD-L');
+        if (cols.ema) headers.push('EMA');
+        if (cols.kc) headers.push('KC');
+        if (cols.fi) headers.push('FI');
+        if (cols.stoch) headers.push('Stoch');
+        if (cols.pattern) headers.push('Patt');
+        if (cols.weekly_vals) headers.push('W-MACD', 'W-EMA20/50/100');
+        if (cols.daily_vals) headers.push('D-FI2', 'D-Stoch', 'D-RSI');
+        if (cols.entry) headers.push('Entry', 'Stop', 'Target');
         
-        // Populate trades
-        const tradesHtml = result.trades.map(trade => {
-            const date = new Date(trade.entry_date).toLocaleDateString('en-US', {month:'short', day:'numeric'});
-            const statusColor = trade.status === 'win' ? 'text-green-400' : 
-                               trade.status === 'loss' ? 'text-red-400' : 'text-yellow-400';
-            const pnl = (trade.exit_price - trade.entry_price).toFixed(2);
-            const pnlColor = parseFloat(pnl) > 0 ? 'text-green-400' : 'text-red-400';
+        document.getElementById('signals-header').innerHTML = headers.map(h => 
+            `<th class="pb-2 px-2 text-xs whitespace-nowrap">${h}</th>`
+        ).join('');
+        
+        // Build rows
+        const rowsHtml = pageData.map(s => {
+            const gradeColor = s.grade === 'A' ? 'bg-yellow-500/20 text-yellow-400' : 
+                              s.grade === 'B' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400';
+            const allWeekly = s.all_weekly_filters ? '✓' : '';
             
-            return '<tr class="border-b border-gray-700 hover:bg-[#1f2937]/50">' +
-                '<td class="py-3 px-2">' + date + '</td>' +
-                '<td class="py-3 px-2">$' + trade.entry_price.toFixed(2) + '</td>' +
-                '<td class="py-3 px-2">$' + trade.exit_price.toFixed(2) + '</td>' +
-                '<td class="py-3 px-2"><span class="' + statusColor + ' font-semibold">' + trade.status.toUpperCase() + '</span></td>' +
-                '<td class="py-3 px-2"><span class="' + pnlColor + ' font-semibold">' + (pnl > 0 ? '+' : '') + pnl + '</span></td>' +
-            '</tr>';
+            let cells = [
+                `<td class="py-2 px-2 font-mono font-bold text-blue-400">${s.symbol}</td>`,
+                `<td class="py-2 px-2 text-gray-300">${s.date}</td>`
+            ];
+            
+            if (cols.price) cells.push(`<td class="py-2 px-2">${s.price}</td>`);
+            if (cols.score) cells.push(`<td class="py-2 px-2 font-bold text-lg">${s.score}</td>`);
+            if (cols.grade) cells.push(`<td class="py-2 px-2"><span class="px-2 py-1 rounded ${gradeColor}">${s.grade}${allWeekly}</span></td>`);
+            if (cols.screen1) cells.push(`<td class="py-2 px-2 text-center">${s.screen1_score}</td>`);
+            if (cols.screen2) cells.push(`<td class="py-2 px-2 text-center">${s.screen2_score}</td>`);
+            if (cols.macd_h) cells.push(`<td class="py-2 px-2 text-center ${s.macd_h_score > 0 ? 'text-green-400' : 'text-gray-500'}">${s.macd_h_score > 0 ? '+'+s.macd_h_score : '0'}</td>`);
+            if (cols.macd_line) cells.push(`<td class="py-2 px-2 text-center ${s.macd_line_score > 0 ? 'text-green-400' : 'text-gray-500'}">${s.macd_line_score > 0 ? '+'+s.macd_line_score : '0'}</td>`);
+            if (cols.ema) cells.push(`<td class="py-2 px-2 text-center ${s.ema_alignment_score > 0 ? 'text-green-400' : 'text-gray-500'}">${s.ema_alignment_score > 0 ? '+'+s.ema_alignment_score : '0'}</td>`);
+            if (cols.kc) cells.push(`<td class="py-2 px-2 text-center ${s.kc_score > 0 ? 'text-green-400' : 'text-gray-500'}">${s.kc_score > 0 ? '+'+s.kc_score : '0'}</td>`);
+            if (cols.fi) cells.push(`<td class="py-2 px-2 text-center ${s.fi_score > 0 ? 'text-green-400' : 'text-gray-500'}">${s.fi_score > 0 ? '+'+s.fi_score : '0'}</td>`);
+            if (cols.stoch) cells.push(`<td class="py-2 px-2 text-center ${s.stoch_score > 0 ? 'text-green-400' : 'text-gray-500'}">${s.stoch_score > 0 ? '+'+s.stoch_score : '0'}</td>`);
+            if (cols.pattern) cells.push(`<td class="py-2 px-2 text-center ${s.pattern_score > 0 ? 'text-green-400' : 'text-gray-500'}">${s.pattern_score > 0 ? '+'+s.pattern_score : '0'}</td>`);
+            if (cols.weekly_vals) {
+                cells.push(`<td class="py-2 px-2 text-xs">${s.weekly_macd_h}</td>`);
+                cells.push(`<td class="py-2 px-2 text-xs">${s.weekly_ema_20}/${s.weekly_ema_50}/${s.weekly_ema_100}</td>`);
+            }
+            if (cols.daily_vals) {
+                cells.push(`<td class="py-2 px-2 text-xs">${s.daily_force_index_2}</td>`);
+                cells.push(`<td class="py-2 px-2 text-xs">${s.daily_stochastic_k}</td>`);
+                cells.push(`<td class="py-2 px-2 text-xs">${s.daily_rsi}</td>`);
+            }
+            if (cols.entry) {
+                cells.push(`<td class="py-2 px-2 text-green-400">${s.entry}</td>`);
+                cells.push(`<td class="py-2 px-2 text-red-400">${s.stop_loss}</td>`);
+                cells.push(`<td class="py-2 px-2 text-blue-400">${s.target}</td>`);
+            }
+            
+            return `<tr class="hover:bg-[#1f2937]/50">${cells.join('')}</tr>`;
         }).join('');
         
-        document.getElementById('bt-trades-container').innerHTML = tradesHtml;
+        document.getElementById('signals-body').innerHTML = rowsHtml || '<tr><td colspan="20" class="text-center py-8 text-gray-500">No signals found</td></tr>';
+        
+        // Pagination
+        if (totalPages > 1) {
+            let paginationHtml = '';
+            if (currentPage > 1) {
+                paginationHtml += `<button onclick="goToPage(${currentPage-1})" class="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600">←</button>`;
+            }
+            paginationHtml += `<span class="px-3 py-1 text-gray-400">Page ${currentPage} of ${totalPages} (${filtered.length} signals)</span>`;
+            if (currentPage < totalPages) {
+                paginationHtml += `<button onclick="goToPage(${currentPage+1})" class="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600">→</button>`;
+            }
+            document.getElementById('pagination').innerHTML = paginationHtml;
+        } else {
+            document.getElementById('pagination').innerHTML = `<span class="text-gray-500">${filtered.length} signals</span>`;
+        }
     }
-
-    function resetBacktest() {
-        document.getElementById('bt-symbol').value = '';
-        document.getElementById('bt-symbol-suggestions').innerHTML = '';
-        document.getElementById('bt-lookback').value = '90';
-        document.getElementById('backtest-results').style.display = 'none';
-        document.getElementById('bt-stats-container').innerHTML = '';
-        document.getElementById('bt-trades-container').innerHTML = '';
-        toast('Backtest reset', 'info');
+    
+    function filterSignalsData() {
+        const symbolFilter = document.getElementById('signal-filter')?.value.toUpperCase() || '';
+        const gradeFilter = document.getElementById('grade-filter')?.value || '';
+        
+        return allSignals.filter(s => {
+            if (symbolFilter && !s.symbol.includes(symbolFilter)) return false;
+            if (gradeFilter && s.grade !== gradeFilter) return false;
+            return true;
+        });
     }
+    
+    function filterSignals() {
+        currentPage = 1;
+        renderSignalsTable();
+    }
+    
+    function goToPage(page) {
+        currentPage = page;
+        renderSignalsTable();
+    }
+    
+    function resetHistoricalScreener() {
+        clearAllStocks();
+        document.getElementById('hs-lookback').value = '180';
+        document.getElementById('hs-min-score').value = '5';
+        document.getElementById('hs-results').style.display = 'none';
+        allSignals = [];
+        toast('Scanner reset', 'info');
+    }
+    
+    function exportToCSV() {
+        if (allSignals.length === 0) {
+            toast('No data to export', 'warning');
+            return;
+        }
+        
+        // Build CSV
+        const headers = ['Symbol','Date','Price','Score','Grade','Screen1','Screen2',
+                        'MACD_H_Score','MACD_Line_Score','EMA_Score','KC_Score','FI_Score','Stoch_Score','Pattern_Score',
+                        'All_Weekly','Weekly_MACD_H','Weekly_EMA_20','Weekly_EMA_50','Weekly_EMA_100',
+                        'Daily_FI2','Daily_Stoch_K','Daily_RSI','Pattern','Entry','Stop','Target'];
+        
+        const rows = allSignals.map(s => [
+            s.symbol, s.date, s.price, s.score, s.grade, s.screen1_score, s.screen2_score,
+            s.macd_h_score, s.macd_line_score, s.ema_alignment_score, s.kc_score, s.fi_score, s.stoch_score, s.pattern_score,
+            s.all_weekly_filters ? 'Yes' : 'No', s.weekly_macd_h, s.weekly_ema_20, s.weekly_ema_50, s.weekly_ema_100,
+            s.daily_force_index_2, s.daily_stochastic_k, s.daily_rsi, s.pattern, s.entry, s.stop_loss, s.target
+        ].join(','));
+        
+        const csv = [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `elder_signals_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('CSV exported!', 'success');
+    }
+    
+    // Add event listener for column toggles
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('col-toggle')) {
+            if (allSignals.length > 0) {
+                renderSignalsTable();
+            }
+        }
+    });
 
     // ========== CHECKLIST ==========
     function checklistView() {

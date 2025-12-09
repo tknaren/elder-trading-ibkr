@@ -1,0 +1,904 @@
+{
+  "errors": [],
+  "results": [
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "AAPL",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ABNB",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ADBE",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ADI",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ADP",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ADSK",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "AEP",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ALGN",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "AMAT",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "AMD",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "AMGN",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "AMZN",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ASML",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "AVGO",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "AXON",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "BIIB",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "BILL",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "BKNG",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "CDNS",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "CEG",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "CHTR",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "CME",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "COIN",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "COST",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "CPRT",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "CRWD",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "CSCO",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "CSX",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "CTAS",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "CTSH",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "DASH",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "DDOG",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "DLTR",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "DOCU",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "DXCM",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "EA",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "EBAY",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ENPH",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "EXC",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "FANG",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "FAST",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "FTNT",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "GEHC",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "GFS",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "GILD",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "GOOGL",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "HOOD",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "IDXX",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ILMN",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "INTC",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "INTU",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ISRG",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "KDP",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "KLAC",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "LCID",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "LRCX",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "MAR",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "MCHP",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "MDLZ",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "META",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "MNST",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "MRNA",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "MRVL",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "MSFT",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "MU",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "NET",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "NFLX",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "NVDA",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "NXPI",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ODFL",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "OKTA",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ON",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ORLY",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "PANW",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "PAYX",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "PCAR",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "PEP",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "PLTR",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "PYPL",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "QCOM",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "REGN",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "RIVN",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ROKU",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "ROST",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "SBUX",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "SEDG",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "SIRI",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "SNPS",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "SOFI",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "TEAM",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "TSLA",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "TTD",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "TTWO",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "TXN",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "VRSK",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "VRTX",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "WBD",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "WDAY",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    },
+    {
+      "expectancy": 0,
+      "note": "No trades matched criteria",
+      "profit_factor": 0,
+      "symbol": "XEL",
+      "total_pnl": 0,
+      "trades": 0,
+      "win_rate": 0
+    }
+  ],
+  "summary": {
+    "avg_win_rate": 0,
+    "completed": 99,
+    "failed": 0,
+    "total_symbols": 99,
+    "total_trades": 0,
+    "winning_trades": 0
+  }
+}
