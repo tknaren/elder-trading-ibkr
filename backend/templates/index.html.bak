@@ -664,13 +664,16 @@
 
     // ========== BACKTEST ==========
     async function backtestView() {
-        const html = `
+        let html = `
             <div class="space-y-6">
                 <h2 class="text-2xl font-bold text-blue-400">📊 Strategy Backtester</h2>
                 
+                <!-- Configuration Panel -->
                 <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
                     <h3 class="font-bold text-lg mb-4 text-blue-300">⚙️ Backtest Configuration</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        
+                        <!-- Symbol Selection -->
                         <div>
                             <label class="block text-sm font-medium text-gray-300 mb-2">Symbol</label>
                             <input type="text" id="bt-symbol" placeholder="Enter symbol (e.g., AAPL)" 
@@ -678,6 +681,7 @@
                             <div id="bt-symbol-suggestions" class="mt-2 max-h-40 overflow-y-auto"></div>
                         </div>
                         
+                        <!-- Market Selection -->
                         <div>
                             <label class="block text-sm font-medium text-gray-300 mb-2">Market</label>
                             <select id="bt-market" class="w-full bg-[#1f2937] border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
@@ -686,6 +690,7 @@
                             </select>
                         </div>
                         
+                        <!-- Lookback Period -->
                         <div>
                             <label class="block text-sm font-medium text-gray-300 mb-2">Lookback Period (days)</label>
                             <input type="number" id="bt-lookback" value="90" min="30" max="365"
@@ -693,6 +698,7 @@
                         </div>
                     </div>
                     
+                    <!-- Indicator Configuration -->
                     <div class="mt-6 pt-6 border-t border-gray-600">
                         <h4 class="font-semibold text-blue-300 mb-4">📈 Indicator Configuration</h4>
                         <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -735,6 +741,7 @@
                         </div>
                     </div>
                     
+                    <!-- Action Buttons -->
                     <div class="mt-6 flex gap-3">
                         <button onclick="runBacktest()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition">
                             🚀 Run Backtest
@@ -745,14 +752,18 @@
                     </div>
                 </div>
                 
+                <!-- Results Container (initially hidden) -->
                 <div id="backtest-results" style="display:none;" class="space-y-6">
                     
+                    <!-- Statistics -->
                     <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
                         <h3 class="font-bold text-lg mb-4 text-green-400">📈 Backtest Statistics</h3>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="bt-stats-container">
+                            <!-- Populated by JavaScript -->
                         </div>
                     </div>
                     
+                    <!-- Trades Table -->
                     <div class="bg-[#111827] rounded-xl p-6 border border-gray-700 overflow-x-auto">
                         <h3 class="font-bold text-lg mb-4 text-blue-400">📋 Trade History</h3>
                         <table class="w-full text-sm">
@@ -766,6 +777,7 @@
                                 </tr>
                             </thead>
                             <tbody id="bt-trades-container">
+                                <!-- Populated by JavaScript -->
                             </tbody>
                         </table>
                     </div>
@@ -2105,15 +2117,17 @@
                 return;
             }
             try {
-                const response = await fetch('/api/backtest/available-stocks');
+                const response = await fetch(\`/api/backtest/available-stocks\`);
                 const data = await response.json();
                 const stocks = data.stocks.filter(s => 
                     s.toUpperCase().includes(query.toUpperCase())
                 ).slice(0, 10);
                 
-                const html = stocks.map(s => {
-                    return '<div onclick="selectBacktestSymbol(\'' + s + '\')" class="p-2 bg-[#1f2937] border-b border-gray-600 cursor-pointer hover:bg-blue-900/30">' + s + '</div>';
-                }).join('');
+                const html = stocks.map(s => 
+                    \`<div onclick="selectBacktestSymbol('\${s}')" class="p-2 bg-[#1f2937] border-b border-gray-600 cursor-pointer hover:bg-blue-900/30">
+                        \${s}
+                    </div>\`
+                ).join('');
                 document.getElementById('bt-symbol-suggestions').innerHTML = html;
             } catch (e) {
                 console.error('Error fetching stocks:', e);
@@ -2170,7 +2184,7 @@
             displayBacktestResults(result);
             toast('Backtest completed!', 'success');
         } catch (e) {
-            toast('Error: ' + e.message, 'error');
+            toast(\`Error: \${e.message}\`, 'error');
         } finally {
             btn.disabled = false;
             btn.innerHTML = '🚀 Run Backtest';
@@ -2193,13 +2207,13 @@
             {label: 'Consecutive Wins', value: result.stats.max_win_streak || 0, icon: '🔥'}
         ];
         
-        const statsHtml = statsData.map(s => {
-            return '<div class="bg-[#1f2937] rounded-lg p-4 border border-gray-600">' +
-                '<div class="text-2xl mb-1">' + s.icon + '</div>' +
-                '<div class="text-gray-400 text-xs">' + s.label + '</div>' +
-                '<div class="text-lg font-bold text-blue-400">' + s.value + '</div>' +
-            '</div>';
-        }).join('');
+        const statsHtml = statsData.map(s => \`
+            <div class="bg-[#1f2937] rounded-lg p-4 border border-gray-600">
+                <div class="text-2xl mb-1">\${s.icon}</div>
+                <div class="text-gray-400 text-xs">\${s.label}</div>
+                <div class="text-lg font-bold text-blue-400">\${s.value}</div>
+            </div>
+        \`).join('');
         
         document.getElementById('bt-stats-container').innerHTML = statsHtml;
         
@@ -2211,13 +2225,15 @@
             const pnl = (trade.exit_price - trade.entry_price).toFixed(2);
             const pnlColor = parseFloat(pnl) > 0 ? 'text-green-400' : 'text-red-400';
             
-            return '<tr class="border-b border-gray-700 hover:bg-[#1f2937]/50">' +
-                '<td class="py-3 px-2">' + date + '</td>' +
-                '<td class="py-3 px-2">$' + trade.entry_price.toFixed(2) + '</td>' +
-                '<td class="py-3 px-2">$' + trade.exit_price.toFixed(2) + '</td>' +
-                '<td class="py-3 px-2"><span class="' + statusColor + ' font-semibold">' + trade.status.toUpperCase() + '</span></td>' +
-                '<td class="py-3 px-2"><span class="' + pnlColor + ' font-semibold">' + (pnl > 0 ? '+' : '') + pnl + '</span></td>' +
-            '</tr>';
+            return \`
+                <tr class="border-b border-gray-700 hover:bg-[#1f2937]/50">
+                    <td class="py-3 px-2">\${date}</td>
+                    <td class="py-3 px-2">$\${trade.entry_price.toFixed(2)}</td>
+                    <td class="py-3 px-2">$\${trade.exit_price.toFixed(2)}</td>
+                    <td class="py-3 px-2"><span class="\${statusColor} font-semibold">\${trade.status.toUpperCase()}</span></td>
+                    <td class="py-3 px-2"><span class="\${pnlColor} font-semibold">\${pnl > 0 ? '+' : ''}\${pnl}</span></td>
+                </tr>
+            \`;
         }).join('');
         
         document.getElementById('bt-trades-container').innerHTML = tradesHtml;

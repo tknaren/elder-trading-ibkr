@@ -647,3 +647,118 @@ def get_workflow_status():
         'alerts': alerts,
         'high_priority_alerts': len([a for a in alerts if a.get('severity') == 'HIGH'])
     })
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BACKTESTING ENDPOINTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+@api_v2.route('/backtest/run', methods=['POST'])
+def run_backtest_endpoint():
+    """
+    Run backtest for a single symbol
+    
+    Body:
+    {
+        "symbol": "AAPL",
+        "market": "US",
+        "lookback_days": 180,
+        "initial_capital": 100000,
+        "risk_per_trade_pct": 1.0,
+        "rr_target": 1.5,
+        "min_grade": "B"
+    }
+    """
+    from services.backtesting import run_backtest
+    
+    data = request.get_json() or {}
+    
+    symbol = data.get('symbol')
+    if not symbol:
+        return jsonify({'error': 'Symbol required'}), 400
+    
+    result = run_backtest(
+        symbol=symbol,
+        market=data.get('market', 'US'),
+        lookback_days=data.get('lookback_days', 180),
+        initial_capital=data.get('initial_capital', 100000),
+        risk_per_trade_pct=data.get('risk_per_trade_pct', 1.0),
+        rr_target=data.get('rr_target', 1.5),
+        min_grade=data.get('min_grade', 'B')
+    )
+    
+    if result:
+        return jsonify(result)
+    return jsonify({'error': f'Could not run backtest for {symbol}'}), 500
+
+
+@api_v2.route('/backtest/portfolio', methods=['POST'])
+def run_portfolio_backtest_endpoint():
+    """
+    Run backtest across multiple symbols
+    
+    Body:
+    {
+        "symbols": ["AAPL", "MSFT", "GOOGL"],
+        "market": "US",
+        "lookback_days": 180,
+        "initial_capital": 100000,
+        "risk_per_trade_pct": 1.0,
+        "rr_target": 1.5,
+        "min_grade": "B"
+    }
+    """
+    from services.backtesting import run_portfolio_backtest
+    
+    data = request.get_json() or {}
+    
+    symbols = data.get('symbols', [])
+    if not symbols:
+        return jsonify({'error': 'Symbols list required'}), 400
+    
+    result = run_portfolio_backtest(
+        symbols=symbols,
+        market=data.get('market', 'US'),
+        lookback_days=data.get('lookback_days', 180),
+        initial_capital=data.get('initial_capital', 100000),
+        risk_per_trade_pct=data.get('risk_per_trade_pct', 1.0),
+        rr_target=data.get('rr_target', 1.5),
+        min_grade=data.get('min_grade', 'B')
+    )
+    
+    return jsonify(result)
+
+
+@api_v2.route('/backtest/quick/<symbol>', methods=['GET'])
+def quick_backtest(symbol):
+    """
+    Quick backtest for a single symbol with default parameters
+    Uses 180 days lookback, 1% risk, 1.5 R:R, Grade B minimum
+    """
+    from services.backtesting import run_backtest
+    
+    result = run_backtest(
+        symbol=symbol,
+        market='US',
+        lookback_days=180,
+        initial_capital=100000,
+        risk_per_trade_pct=1.0,
+        rr_target=1.5,
+        min_grade='B'
+    )
+    
+    if result:
+        # Return summary for quick view
+        return jsonify({
+            'symbol': result['symbol'],
+            'period': f"{result['period_days']} days",
+            'total_trades': result['total_trades'],
+            'win_rate': result['win_rate'],
+            'total_pnl': result['total_pnl'],
+            'profit_factor': result['profit_factor'],
+            'max_drawdown': result['max_drawdown'],
+            'expectancy': result['expectancy'],
+            'trades': result['trades'][:10],  # Last 10 trades for preview
+            'full_result_available': True
+        })
+    return jsonify({'error': f'Could not run backtest for {symbol}'}), 500
