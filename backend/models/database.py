@@ -262,7 +262,6 @@ class Database:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
-            
             -- Indicator Filters Config
             CREATE TABLE IF NOT EXISTS indicator_filters (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -271,6 +270,20 @@ class Database:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             );
+
+            -- Favorite Stocks
+            CREATE TABLE IF NOT EXISTS favorite_stocks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                market TEXT NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, symbol, market),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_favorite_user_market ON favorite_stocks(user_id, market);
 
             -- Historical OHLCV data (2-year cache)
             CREATE TABLE IF NOT EXISTS stock_historical_data (

@@ -1100,3 +1100,178 @@ def save_indicator_filters():
     db.commit()
 
     return jsonify({'success': True, 'message': 'Indicator filters saved'})
+
+
+# ========== FAVORITES ==========
+@api.route('/favorites', methods=['GET'])
+def get_favorites():
+    """Get all favorite stocks for current market with price data"""
+    user_id = get_user_id()
+    market = request.args.get('market', 'US')
+    db = get_db()
+
+    favorites = db.execute('''
+        SELECT id, symbol, market, notes, created_at 
+        FROM favorite_stocks 
+        WHERE user_id = ? AND market = ?
+        ORDER BY created_at DESC
+    ''', (user_id, market)).fetchall()
+
+    # Get stock data for each favorite
+    from services.screener import scan_stock
+    results = []
+    for fav in favorites:
+        try:
+            stock_data = scan_stock(fav['symbol'], market)
+            stock_data['notes'] = fav['notes']
+            stock_data['fav_id'] = fav['id']
+            stock_data['created_at'] = fav['created_at']
+            results.append(stock_data)
+        except Exception as e:
+            print(f"Error scanning {fav['symbol']}: {e}")
+            # Still add favorite even if scan failed
+            results.append({
+                'symbol': fav['symbol'],
+                'name': fav['symbol'],
+                'price': 0,
+                'notes': fav['notes'],
+                'fav_id': fav['id'],
+                'created_at': fav['created_at'],
+                'error': str(e)
+            })
+
+    return jsonify({
+        'success': True,
+        'favorites': results,
+        'count': len(results)
+    })
+
+
+@api.route('/favorites/<symbol>', methods=['POST'])
+def toggle_favorite(symbol):
+    """Toggle favorite status for a stock"""
+    user_id = get_user_id()
+    data = request.get_json() or {}
+    market = data.get('market', 'US')
+    notes = data.get('notes', '')
+    db = get_db()
+
+    # Check if already favorited
+    existing = db.execute('''
+        SELECT id FROM favorite_stocks 
+        WHERE user_id = ? AND symbol = ? AND market = ?
+    ''', (user_id, symbol, market)).fetchone()
+
+    if existing:
+        # Remove favorite
+        db.execute('''
+            DELETE FROM favorite_stocks 
+            WHERE user_id = ? AND symbol = ? AND market = ?
+        ''', (user_id, symbol, market))
+        db.commit()
+        return jsonify({'success': True, 'favorited': False})
+    else:
+        # Add favorite
+        db.execute('''
+            INSERT INTO favorite_stocks (user_id, symbol, market, notes)
+            VALUES (?, ?, ?, ?)
+        ''', (user_id, symbol, market, notes))
+        db.commit()
+        return jsonify({'success': True, 'favorited': True})
+
+
+@api.route('/favorites/<symbol>', methods=['DELETE'])
+def remove_favorite(symbol):
+    """Remove a stock from favorites"""
+    user_id = get_user_id()
+    market = request.args.get('market', 'US')
+    db = get_db()
+
+    db.execute('''
+        DELETE FROM favorite_stocks 
+        WHERE user_id = ? AND symbol = ? AND market = ?
+    ''', (user_id, symbol, market))
+    db.commit()
+
+    return jsonify({'success': True, 'message': f'{symbol} removed from favorites'})
+
+
+@api.route('/favorites/<symbol>/notes', methods=['PUT'])
+def update_favorite_notes(symbol):
+    """Update notes for a favorite stock"""
+    user_id = get_user_id()
+    data = request.get_json() or {}
+    market = data.get('market', 'US')
+    notes = data.get('notes', '')
+    db = get_db()
+
+    db.execute('''
+        UPDATE favorite_stocks 
+        SET notes = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = ? AND symbol = ? AND market = ?
+    ''', (notes, user_id, symbol, market))
+    db.commit()
+
+    return jsonify({'success': True, 'message': 'Notes updated'})
+
+
+@api.route('/favorites/check/<symbol>', methods=['GET'])
+def check_favorite(symbol):
+    """Check if stock is favorited"""
+    user_id = get_user_id()
+    market = request.args.get('market', 'US')
+    db = get_db()
+
+    favorite = db.execute('''
+        SELECT id FROM favorite_stocks 
+        WHERE user_id = ? AND symbol = ? AND market = ?
+    ''', (user_id, symbol, market)).fetchone()
+
+    return jsonify({'favorited': favorite is not None})
+
+
+# ========== BACKTESTING ==========
+@api.route('/backtest/run', methods=['POST'])
+def run_backtest():
+    """Run backtest for a symbol"""
+    from services.backtesting import run_backtest_for_symbol
+
+    data = request.get_json() or {}
+    symbol = data.get('symbol', '').upper()
+    market = data.get('market', 'US')
+    lookback_days = data.get('lookback_days', 90)
+    config = data.get('config', {})
+
+    if not symbol:
+        return jsonify({'error': 'Symbol required'}), 400
+
+    try:
+        results = run_backtest_for_symbol(
+            symbol, market, lookback_days, config)
+        results = sanitize_for_json(results)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@api.route('/backtest/available-stocks', methods=['GET'])
+def get_backtest_stocks():
+    """Get list of available stocks for backtesting"""
+    market = request.args.get('market', 'US')
+
+    # Get stocks that have at least 90 days of historical data
+    db = get_db()
+    stocks = db.execute('''
+        SELECT DISTINCT symbol
+        FROM stock_historical_data
+        GROUP BY symbol
+        HAVING COUNT(*) >= 90
+        ORDER BY symbol
+        LIMIT 100
+    ''').fetchall()
+
+    return jsonify({
+        'success': True,
+        'stocks': [s['symbol'] for s in stocks],
+        'count': len(stocks)
+    })

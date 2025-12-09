@@ -52,16 +52,19 @@
     let settings = [];
     let weeklyData = null;
     let checklist = {};
+    let isLoading = false;  // Track loading state
 
     const tabs = [
         {id:'screener', icon:'🔍', label:'Screener'},
+        {id:'backtest', icon:'📊', label:'Backtest'},
         {id:'trade-bill', icon:'💼', label:'Trade Bill'},
         {id:'trade-bills', icon:'📋', label:'Trade Bills'},
-        {id:'journal-dashboard', icon:'📊', label:'Dashboard'},
+        {id:'journal-dashboard', icon:'📈', label:'Dashboard'},
         {id:'trade-log', icon:'📝', label:'Trade Log'},
         {id:'trade-summary', icon:'📈', label:'Trade Summary'},
         {id:'pnl-tracker', icon:'💵', label:'P&L Tracker'},
         {id:'mistakes', icon:'⚠️', label:'Mistakes'},
+        {id:'favorites', icon:'⭐', label:'Favorites'},
         {id:'account', icon:'💰', label:'Account'},
         {id:'checklist', icon:'✅', label:'Checklist'},
         {id:'settings', icon:'⚙️', label:'Settings'}
@@ -137,6 +140,7 @@
     async function render() {
         const c = document.getElementById('content');
         if(currentTab==='screener') c.innerHTML = screenView();
+        else if(currentTab==='backtest') c.innerHTML = await backtestView();
         else if(currentTab==='trade-bill') { c.innerHTML = tradeBillView(); triggerTradeBillCalc(); }
         else if(currentTab==='trade-bills') c.innerHTML = await tradeBillsView();
         else if(currentTab==='journal-dashboard') c.innerHTML = await journalDashboardView();
@@ -144,6 +148,7 @@
         else if(currentTab==='trade-summary') c.innerHTML = await tradeSummaryView();
         else if(currentTab==='pnl-tracker') c.innerHTML = await pnlTrackerView();
         else if(currentTab==='mistakes') c.innerHTML = await mistakesView();
+        else if(currentTab==='favorites') c.innerHTML = await favoritesView();
         else if(currentTab==='account') c.innerHTML = await accountView();
         else if(currentTab==='checklist') c.innerHTML = checklistView();
         else if(currentTab==='settings') c.innerHTML = settingsView();
@@ -161,9 +166,9 @@
                 <div class="flex items-center justify-between">
                     <div><h2 class="text-xl font-bold">Triple Screen Scanner</h2><p class="text-gray-500 text-sm">Weekly trend + Daily entry timing</p></div>
                     <div class="flex gap-2">
-                        <button onclick="showIndicatorFilterModal()" class="px-3 py-2 bg-purple-600/30 border border-purple-500 rounded-lg hover:bg-purple-600/50" title="Configure Indicators">⚙️ Filters</button>
-                        <button onclick="runWeekly()" class="px-4 py-2 bg-blue-600 rounded-lg font-medium hover:bg-blue-700">🔍 Run Weekly Scan</button>
-                        <button onclick="showCriteriaModal()" class="px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600" title="How grading works">❓</button>
+                        <button onclick="showIndicatorFilterModal()" class="px-3 py-2 bg-purple-600/30 border border-purple-500 rounded-lg hover:bg-purple-600/50" title="Configure Indicators" ${isLoading ? 'disabled' : ''}>⚙️ Filters</button>
+                        <button id="run-scan-btn" onclick="runWeekly()" class="px-4 py-2 bg-blue-600 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed" ${isLoading ? 'disabled' : ''}>🔍 Run Weekly Scan</button>
+                        <button onclick="showCriteriaModal()" class="px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600" title="How grading works" ${isLoading ? 'disabled' : ''}>❓</button>
                     </div>
                 </div>
 
@@ -251,7 +256,10 @@
                                             <td class="p-3 text-right font-mono ${r.rsi<30?'text-green-400':r.rsi>70?'text-red-400':'text-gray-300'}">${r.rsi?.toFixed(0)}</td>
                                             <td class="p-3 text-right font-mono ${r.price_vs_ema<=0?'text-green-400':r.price_vs_ema>3?'text-red-400':'text-yellow-400'}">${r.price_vs_ema>=0?'+':''}${r.price_vs_ema?.toFixed(1)}%</td>
                                             <td class="p-3 text-center">
-                                                <button onclick="showDetail(this.dataset.stock)" class="px-2 py-1 bg-gray-700 rounded text-xs hover:bg-blue-600" data-stock='${JSON.stringify(r).replace(/'/g, "&apos;")}'>Details</button>
+                                                <div class="flex gap-1 justify-center">
+                                                    <button onclick="toggleFavorite('${r.symbol}')" class="px-2 py-1 text-xs rounded hover:bg-yellow-600/40" title="Add to favorites">⭐</button>
+                                                    <button onclick="showDetail(this.dataset.stock)" class="px-2 py-1 bg-gray-700 rounded text-xs hover:bg-blue-600" data-stock='${JSON.stringify(r).replace(/'/g, "&apos;")}'>Details</button>
+                                                </div>
                                             </td>
                                         </tr>
                                     `).join('')}
@@ -294,7 +302,27 @@
     }
 
     async function runWeekly() {
-        toast('Scanning stocks...', 'info');
+        if(isLoading) return;  // Prevent multiple clicks
+        
+        isLoading = true;
+        const btn = document.getElementById('run-scan-btn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="inline-block animate-spin">⏳</span> Scanning...';
+        btn.disabled = true;
+        
+        // Show loading modal
+        const loadingModal = document.createElement('div');
+        loadingModal.id = 'loading-modal';
+        loadingModal.className = 'fixed inset-0 bg-black/80 z-50 flex items-center justify-center';
+        loadingModal.innerHTML = `
+            <div class="text-center">
+                <div class="inline-block animate-spin text-6xl mb-4">⏳</div>
+                <h3 class="text-xl font-bold text-white mb-2">Scanning 100 stocks...</h3>
+                <p class="text-gray-400">This may take 2-3 minutes</p>
+            </div>
+        `;
+        document.body.appendChild(loadingModal);
+        
         const market = document.getElementById('market').value;
         try {
             weeklyData = await api('POST', '/screener/weekly', {market});
@@ -302,6 +330,13 @@
             await render();
         } catch(e) {
             toast('Scan failed: '+e.message, 'error');
+        } finally {
+            isLoading = false;
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            const modal = document.getElementById('loading-modal');
+            if(modal) modal.remove();
+            await render();  // Re-render to update button state
         }
     }
 
@@ -412,6 +447,10 @@
             risk_percent: stock.risk_percent
         };
         await switchTab('trade-bill');
+        // Trigger calculation immediately after view renders
+        setTimeout(() => {
+            autoCalculateTradeBill();
+        }, 150);
     }
 
     async function addToWatchlist(symbol) {
@@ -621,6 +660,131 @@
         document.getElementById('tb-ticker').value = symbol;
         document.getElementById('ticker-suggestions').innerHTML = '';
         toast(`Stock ${symbol} selected!`, 'success');
+    }
+
+    // ========== BACKTEST ==========
+    async function backtestView() {
+        let html = `
+            <div class="space-y-6">
+                <h2 class="text-2xl font-bold text-blue-400">📊 Strategy Backtester</h2>
+                
+                <!-- Configuration Panel -->
+                <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
+                    <h3 class="font-bold text-lg mb-4 text-blue-300">⚙️ Backtest Configuration</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        
+                        <!-- Symbol Selection -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Symbol</label>
+                            <input type="text" id="bt-symbol" placeholder="Enter symbol (e.g., AAPL)" 
+                                   class="w-full bg-[#1f2937] border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
+                            <div id="bt-symbol-suggestions" class="mt-2 max-h-40 overflow-y-auto"></div>
+                        </div>
+                        
+                        <!-- Market Selection -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Market</label>
+                            <select id="bt-market" class="w-full bg-[#1f2937] border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
+                                <option value="us">US Market</option>
+                                <option value="india">India Market</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Lookback Period -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Lookback Period (days)</label>
+                            <input type="number" id="bt-lookback" value="90" min="30" max="365"
+                                   class="w-full bg-[#1f2937] border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500">
+                        </div>
+                    </div>
+                    
+                    <!-- Indicator Configuration -->
+                    <div class="mt-6 pt-6 border-t border-gray-600">
+                        <h4 class="font-semibold text-blue-300 mb-4">📈 Indicator Configuration</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="bt-ema22" checked class="rounded">
+                                <span>EMA 22</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="bt-ema50" checked class="rounded">
+                                <span>EMA 50</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="bt-ema100" checked class="rounded">
+                                <span>EMA 100</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="bt-ema200" checked class="rounded">
+                                <span>EMA 200</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="bt-macd" checked class="rounded">
+                                <span>MACD</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="bt-force-index" checked class="rounded">
+                                <span>Force Index</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="bt-stochastic" checked class="rounded">
+                                <span>Stochastic</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="bt-rsi" checked class="rounded">
+                                <span>RSI</span>
+                            </label>
+                            <label class="flex items-center space-x-2 text-gray-300 cursor-pointer">
+                                <input type="checkbox" id="bt-adx" checked class="rounded">
+                                <span>ADX</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="mt-6 flex gap-3">
+                        <button onclick="runBacktest()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition">
+                            🚀 Run Backtest
+                        </button>
+                        <button onclick="resetBacktest()" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition">
+                            ↻ Reset
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Results Container (initially hidden) -->
+                <div id="backtest-results" style="display:none;" class="space-y-6">
+                    
+                    <!-- Statistics -->
+                    <div class="bg-[#111827] rounded-xl p-6 border border-gray-700">
+                        <h3 class="font-bold text-lg mb-4 text-green-400">📈 Backtest Statistics</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="bt-stats-container">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                    
+                    <!-- Trades Table -->
+                    <div class="bg-[#111827] rounded-xl p-6 border border-gray-700 overflow-x-auto">
+                        <h3 class="font-bold text-lg mb-4 text-blue-400">📋 Trade History</h3>
+                        <table class="w-full text-sm">
+                            <thead class="border-b border-gray-600">
+                                <tr class="text-left text-gray-300">
+                                    <th class="pb-2 px-2">Date</th>
+                                    <th class="pb-2 px-2">Entry</th>
+                                    <th class="pb-2 px-2">Exit</th>
+                                    <th class="pb-2 px-2">Status</th>
+                                    <th class="pb-2 px-2">P&L</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bt-trades-container">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+        return html;
     }
 
     // ========== CRITERIA ==========
@@ -939,13 +1103,11 @@
         
         // Risk = (Entry - Stop Loss) × Quantity (hard stop risk)
         const risk = Math.round(riskPerShare * quantity * 100) / 100;
-        
         // Reward = (Target - Entry) × Quantity
         const reward = target ? Math.round((target - entry) * quantity * 100) / 100 : 0;
         
-        // R:R Ratio = Reward / Risk
-        const rewardRatio = risk > 0 && reward > 0 ? Math.round((reward / risk) * 100) / 100 : 0;
-        const riskRewardRatio = rewardRatio > 0 ? `1:${rewardRatio.toFixed(2)}` : '1:0';
+        // R:R Ratio = Reward / Risk (as a decimal number)
+        const riskRewardRatio = risk > 0 && reward > 0 ? Math.round((reward / risk) * 100) / 100 : 0;
         
         // Break Even = Entry (or Entry + overnight charges per share)
         const breakEven = quantity > 0 && overnightCharges > 0 ? Math.round((entry + (overnightCharges / quantity)) * 100) / 100 : entry;
@@ -1778,6 +1940,313 @@
         } catch(e) {
             return `<div class="text-red-400">Error: ${e.message}</div>`;
         }
+    }
+
+    // ========== FAVORITES ==========
+    async function favoritesView() {
+        const market = document.getElementById('market').value;
+        try {
+            const response = await api('GET', `/favorites?market=${market}`);
+            const favorites = response.favorites || [];
+            
+            return `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-2xl font-bold">⭐ Favorite Stocks</h2>
+                            <p class="text-gray-500 text-sm">Your watched stocks with price data</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <select id="fav-market" onchange="favoritesMarketChanged()" class="bg-[#1f2937] border border-gray-600 rounded px-3 py-2 text-sm">
+                                <option value="US" ${market === 'US' ? 'selected' : ''}>🇺🇸 NASDAQ</option>
+                                <option value="IN" ${market === 'IN' ? 'selected' : ''}>🇮🇳 NSE</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    ${favorites.length === 0 ? `
+                        <div class="text-center py-20 text-gray-500">
+                            <div class="text-6xl mb-4">⭐</div>
+                            <h3 class="text-xl font-semibold">No Favorite Stocks Yet</h3>
+                            <p class="mt-2">Click the star icon on any stock in the screener to add it to your favorites</p>
+                            <button onclick="switchTab('screener')" class="mt-6 px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700">Go to Screener</button>
+                        </div>
+                    ` : `
+                        <div class="bg-[#111827] rounded-xl overflow-hidden border border-gray-700">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-[#1f2937]">
+                                        <tr>
+                                            <th class="text-left p-3 font-medium text-gray-400">Symbol</th>
+                                            <th class="text-left p-3 font-medium text-gray-400">Price</th>
+                                            <th class="text-left p-3 font-medium text-gray-400">Name</th>
+                                            <th class="text-left p-3 font-medium text-gray-400">Notes</th>
+                                            <th class="text-left p-3 font-medium text-gray-400">Added</th>
+                                            <th class="text-center p-3 font-medium text-gray-400">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${favorites.map(fav => `
+                                            <tr class="border-t border-gray-700/50 hover:bg-[#1f2937]/50">
+                                                <td class="p-3">
+                                                    <span class="font-mono font-bold text-blue-400">${fav.symbol}</span>
+                                                </td>
+                                                <td class="p-3 font-mono">
+                                                    $${fav.price ? fav.price.toFixed(2) : 'N/A'}
+                                                </td>
+                                                <td class="p-3 text-sm text-gray-400">${fav.name || ''}</td>
+                                                <td class="p-3 text-sm text-gray-400">${fav.notes ? fav.notes : '-'}</td>
+                                                <td class="p-3 text-xs text-gray-500">${new Date(fav.created_at).toLocaleDateString()}</td>
+                                                <td class="p-3 text-center">
+                                                    <div class="flex gap-1 justify-center">
+                                                        <button onclick="editFavoriteNotes('${fav.symbol}')" class="px-2 py-1 text-xs bg-blue-600 rounded hover:bg-blue-700" title="Edit notes">📝</button>
+                                                        <button onclick="removeFavoriteStock('${fav.symbol}')" class="px-2 py-1 text-xs bg-red-600 rounded hover:bg-red-700" title="Remove">✕</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="bg-[#111827] rounded-xl p-4 border border-gray-700">
+                            <div class="flex justify-between items-center">
+                                <p class="text-sm text-gray-400">Total favorites: <span class="font-bold text-blue-400">${favorites.length}</span></p>
+                                <div class="flex gap-2">
+                                    <button onclick="switchTab('screener')" class="px-3 py-2 text-sm bg-blue-600 rounded hover:bg-blue-700">➕ Add More</button>
+                                    <button onclick="confirmClearAllFavorites()" class="px-3 py-2 text-sm bg-red-600 rounded hover:bg-red-700">🗑️ Clear All</button>
+                                </div>
+                            </div>
+                        </div>
+                    `}
+                </div>
+            `;
+        } catch(e) {
+            return `<div class="text-red-400">Error loading favorites: ${e.message}</div>`;
+        }
+    }
+
+    async function removeFavoriteStock(symbol) {
+        if (!confirm(`Remove ${symbol} from favorites?`)) return;
+        
+        const market = document.getElementById('market').value;
+        try {
+            await api('DELETE', `/favorites/${symbol}?market=${market}`);
+            toast(`${symbol} removed from favorites`, 'success');
+            await switchTab('favorites');
+        } catch(e) {
+            toast(`Error: ${e.message}`, 'error');
+        }
+    }
+
+    async function editFavoriteNotes(symbol) {
+        const market = document.getElementById('market').value;
+        const currentNotes = prompt('Enter notes for this stock:', '');
+        if (currentNotes === null) return;
+        
+        try {
+            const result = await api('PUT', `/favorites/${symbol}/notes`, {market, notes: currentNotes});
+            toast('Notes updated', 'success');
+            await switchTab('favorites');
+        } catch(e) {
+            toast(`Error: ${e.message}`, 'error');
+        }
+    }
+
+    async function toggleFavorite(symbol) {
+        const market = document.getElementById('market').value;
+        try {
+            const result = await api('POST', `/favorites/${symbol}`, {market});
+            if (result.favorited) {
+                toast(`${symbol} added to favorites!`, 'success');
+            } else {
+                toast(`${symbol} removed from favorites`, 'success');
+            }
+        } catch(e) {
+            toast(`Error: ${e.message}`, 'error');
+        }
+    }
+
+    async function confirmClearAllFavorites() {
+        if (!confirm('Are you sure? This will remove ALL favorites. This cannot be undone.')) return;
+        await clearAllFavorites();
+    }
+
+    async function clearAllFavorites() {
+        const market = document.getElementById('market').value;
+        try {
+            const response = await api('GET', `/favorites?market=${market}`);
+            const favorites = response.favorites || [];
+            
+            if (favorites.length === 0) {
+                toast('No favorites to clear', 'info');
+                return;
+            }
+            
+            let cleared = 0;
+            for (let fav of favorites) {
+                try {
+                    await api('DELETE', `/favorites/${fav.symbol}?market=${market}`);
+                    cleared++;
+                } catch(e) {
+                    console.error(`Failed to delete ${fav.symbol}:`, e);
+                }
+            }
+            
+            toast(`Cleared ${cleared} favorites`, 'success');
+            await switchTab('favorites');
+        } catch(e) {
+            toast(`Error: ${e.message}`, 'error');
+        }
+    }
+
+    async function favoritesMarketChanged() {
+        const newMarket = document.getElementById('fav-market').value;
+        document.getElementById('market').value = newMarket;
+        await switchTab('favorites');
+    }
+
+    // ========== BACKTEST ==========
+    // Symbol typeahead for backtest
+    document.addEventListener('input', async function(e) {
+        if (e.target.id === 'bt-symbol') {
+            const query = e.target.value.trim();
+            if (query.length < 1) {
+                document.getElementById('bt-symbol-suggestions').innerHTML = '';
+                return;
+            }
+            try {
+                const response = await fetch(\`/api/backtest/available-stocks\`);
+                const data = await response.json();
+                const stocks = data.stocks.filter(s => 
+                    s.toUpperCase().includes(query.toUpperCase())
+                ).slice(0, 10);
+                
+                const html = stocks.map(s => 
+                    \`<div onclick="selectBacktestSymbol('\${s}')" class="p-2 bg-[#1f2937] border-b border-gray-600 cursor-pointer hover:bg-blue-900/30">
+                        \${s}
+                    </div>\`
+                ).join('');
+                document.getElementById('bt-symbol-suggestions').innerHTML = html;
+            } catch (e) {
+                console.error('Error fetching stocks:', e);
+            }
+        }
+    });
+
+    function selectBacktestSymbol(symbol) {
+        document.getElementById('bt-symbol').value = symbol;
+        document.getElementById('bt-symbol-suggestions').innerHTML = '';
+    }
+
+    async function runBacktest() {
+        const symbol = document.getElementById('bt-symbol').value.trim().toUpperCase();
+        const market = document.getElementById('bt-market').value;
+        const lookback = parseInt(document.getElementById('bt-lookback').value);
+        
+        if (!symbol) {
+            toast('Please select a symbol', 'warning');
+            return;
+        }
+        
+        // Build indicator config
+        const config = {
+            ema22: document.getElementById('bt-ema22').checked,
+            ema50: document.getElementById('bt-ema50').checked,
+            ema100: document.getElementById('bt-ema100').checked,
+            ema200: document.getElementById('bt-ema200').checked,
+            macd: document.getElementById('bt-macd').checked,
+            force_index: document.getElementById('bt-force-index').checked,
+            stochastic: document.getElementById('bt-stochastic').checked,
+            rsi: document.getElementById('bt-rsi').checked,
+            adx: document.getElementById('bt-adx').checked
+        };
+        
+        const btn = document.querySelector('button[onclick="runBacktest()"]');
+        
+        try {
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Running...';
+            
+            const response = await fetch('/api/backtest/run', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({symbol, market, lookback_days: lookback, config})
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.error || 'Backtest failed');
+            }
+            
+            displayBacktestResults(result);
+            toast('Backtest completed!', 'success');
+        } catch (e) {
+            toast(\`Error: \${e.message}\`, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '🚀 Run Backtest';
+        }
+    }
+
+    function displayBacktestResults(result) {
+        // Show results container
+        document.getElementById('backtest-results').style.display = 'block';
+        
+        // Populate statistics
+        const statsData = [
+            {label: 'Total Trades', value: result.stats.total_trades, icon: '📊'},
+            {label: 'Win Rate', value: result.stats.win_percentage.toFixed(1) + '%', icon: '✅'},
+            {label: 'Profit Factor', value: result.stats.profit_factor.toFixed(2), icon: '💰'},
+            {label: 'Avg Win', value: '$' + result.stats.avg_win.toFixed(2), icon: '📈'},
+            {label: 'Avg Loss', value: '$' + result.stats.avg_loss.toFixed(2), icon: '📉'},
+            {label: 'Expectancy', value: '$' + result.stats.expectancy.toFixed(2), icon: '🎯'},
+            {label: 'Total P&L', value: '$' + result.stats.total_pnl.toFixed(2), icon: '💵'},
+            {label: 'Consecutive Wins', value: result.stats.max_win_streak || 0, icon: '🔥'}
+        ];
+        
+        const statsHtml = statsData.map(s => \`
+            <div class="bg-[#1f2937] rounded-lg p-4 border border-gray-600">
+                <div class="text-2xl mb-1">\${s.icon}</div>
+                <div class="text-gray-400 text-xs">\${s.label}</div>
+                <div class="text-lg font-bold text-blue-400">\${s.value}</div>
+            </div>
+        \`).join('');
+        
+        document.getElementById('bt-stats-container').innerHTML = statsHtml;
+        
+        // Populate trades
+        const tradesHtml = result.trades.map(trade => {
+            const date = new Date(trade.entry_date).toLocaleDateString('en-US', {month:'short', day:'numeric'});
+            const statusColor = trade.status === 'win' ? 'text-green-400' : 
+                               trade.status === 'loss' ? 'text-red-400' : 'text-yellow-400';
+            const pnl = (trade.exit_price - trade.entry_price).toFixed(2);
+            const pnlColor = parseFloat(pnl) > 0 ? 'text-green-400' : 'text-red-400';
+            
+            return \`
+                <tr class="border-b border-gray-700 hover:bg-[#1f2937]/50">
+                    <td class="py-3 px-2">\${date}</td>
+                    <td class="py-3 px-2">$\${trade.entry_price.toFixed(2)}</td>
+                    <td class="py-3 px-2">$\${trade.exit_price.toFixed(2)}</td>
+                    <td class="py-3 px-2"><span class="\${statusColor} font-semibold">\${trade.status.toUpperCase()}</span></td>
+                    <td class="py-3 px-2"><span class="\${pnlColor} font-semibold">\${pnl > 0 ? '+' : ''}\${pnl}</span></td>
+                </tr>
+            \`;
+        }).join('');
+        
+        document.getElementById('bt-trades-container').innerHTML = tradesHtml;
+    }
+
+    function resetBacktest() {
+        document.getElementById('bt-symbol').value = '';
+        document.getElementById('bt-symbol-suggestions').innerHTML = '';
+        document.getElementById('bt-lookback').value = '90';
+        document.getElementById('backtest-results').style.display = 'none';
+        document.getElementById('bt-stats-container').innerHTML = '';
+        document.getElementById('bt-trades-container').innerHTML = '';
+        toast('Backtest reset', 'info');
     }
 
     // ========== CHECKLIST ==========
