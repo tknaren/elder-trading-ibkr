@@ -57,6 +57,8 @@
     const tabs = [
         {id:'screener', icon:'🔍', label:'Screener'},
         {id:'backtest', icon:'📊', label:'Signal Scanner'},
+        {id:'candlestick-screener', icon:'🕯️', label:'Candlestick'},
+        {id:'rsi-macd-screener', icon:'📈', label:'RSI+MACD'},
         {id:'trade-bill', icon:'💼', label:'Trade Bill'},
         {id:'trade-bills', icon:'📋', label:'Trade Bills'},
         {id:'journal-dashboard', icon:'📈', label:'Dashboard'},
@@ -141,6 +143,8 @@
         const c = document.getElementById('content');
         if(currentTab==='screener') c.innerHTML = screenView();
         else if(currentTab==='backtest') c.innerHTML = await backtestView();
+        else if(currentTab==='candlestick-screener') c.innerHTML = candlestickScreenerView();
+        else if(currentTab==='rsi-macd-screener') c.innerHTML = rsiMacdScreenerView();
         else if(currentTab==='trade-bill') { c.innerHTML = tradeBillView(); triggerTradeBillCalc(); }
         else if(currentTab==='trade-bills') c.innerHTML = await tradeBillsView();
         else if(currentTab==='journal-dashboard') c.innerHTML = await journalDashboardView();
@@ -957,6 +961,306 @@
     }
 
     function showCriteriaModal() { switchTab('criteria'); }
+
+    // ========== CANDLESTICK PATTERN SCREENER ==========
+    let candlestickResults = [];
+    let candlestickLoading = false;
+    let candlestickSelectedStocks = [];
+    let candlestickLookbackDays = 180;
+    let candlestickFilterMode = 'all';
+    
+    function candlestickScreenerView() {
+        const market = document.getElementById('market')?.value || 'US';
+        const stocks = market === 'US' ? [
+            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AMD', 'AVGO', 'NFLX',
+            'COST', 'PEP', 'ADBE', 'CSCO', 'INTC', 'QCOM', 'TXN', 'INTU', 'AMAT', 'MU',
+            'LRCX', 'KLAC', 'SNPS', 'CDNS', 'MRVL', 'ON', 'NXPI', 'ADI', 'MCHP', 'FTNT',
+            'VRTX', 'CHTR', 'ASML', 'CRWD', 'MNST', 'TEAM', 'PAYX', 'AEP', 'CPRT', 'PCAR',
+            'AMGN', 'MRNA', 'XEL', 'WDAY', 'ABNB', 'MDLZ', 'ANSS', 'DDOG', 'ODFL', 'GOOG'
+        ] : [
+            'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'HINDUNILVR', 'SBIN', 
+            'BHARTIARTL', 'ITC', 'KOTAKBANK', 'LT', 'AXISBANK', 'ASIANPAINT', 'MARUTI', 
+            'TITAN', 'SUNPHARMA', 'ULTRACEMCO', 'BAJFINANCE', 'WIPRO', 'HCLTECH',
+            'TATAMOTORS', 'POWERGRID', 'NTPC', 'M&M', 'JSWSTEEL'
+        ];
+        
+        if (candlestickSelectedStocks.length === 0) candlestickSelectedStocks = stocks.slice(0, 20);
+        
+        const resultsHtml = candlestickResults.length > 0 ? `
+            <div class="bg-[#111827] rounded-xl border border-gray-700 overflow-hidden mt-4">
+                <div class="p-4 border-b border-gray-700">
+                    <h3 class="font-semibold">Results: ${candlestickResults.length} signals found</h3>
+                </div>
+                <div class="overflow-x-auto max-h-96">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-800 sticky top-0">
+                            <tr>
+                                <th class="px-3 py-2 text-left">Symbol</th>
+                                <th class="px-3 py-2 text-left">Date</th>
+                                <th class="px-3 py-2 text-right">Close</th>
+                                <th class="px-3 py-2 text-left">Patterns</th>
+                                <th class="px-3 py-2 text-right">RSI</th>
+                                <th class="px-3 py-2 text-right">KC Lower</th>
+                                <th class="px-3 py-2 text-center">Filters</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-700">
+                            ${candlestickResults.slice(0, 100).map(s => `
+                                <tr class="hover:bg-gray-700/50 ${s.filters_match ? 'bg-green-900/20' : ''}">
+                                    <td class="px-3 py-2 font-medium text-blue-400">${s.symbol}</td>
+                                    <td class="px-3 py-2">${s.date}</td>
+                                    <td class="px-3 py-2 text-right">$${s.close}</td>
+                                    <td class="px-3 py-2">
+                                        ${(s.patterns || []).map(p => `<span class="px-2 py-0.5 text-xs rounded ${p.includes('Hammer') ? 'bg-green-600/30 text-green-400' : p.includes('Engulfing') ? 'bg-blue-600/30 text-blue-400' : 'bg-purple-600/30 text-purple-400'}">${p}</span>`).join(' ')}
+                                    </td>
+                                    <td class="px-3 py-2 text-right ${s.rsi < 30 ? 'text-green-400 font-medium' : ''}">${s.rsi || '-'}</td>
+                                    <td class="px-3 py-2 text-right">${s.kc_lower || '-'}</td>
+                                    <td class="px-3 py-2 text-center">${s.filters_match ? '✅' : '❌'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        ` : '';
+        
+        return `
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold">🕯️ Candlestick Pattern Screener</h2>
+                </div>
+                
+                <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-sm">
+                    <strong>Patterns Detected:</strong> Hammer, Bullish Engulfing, Piercing Pattern, Tweezer Bottom<br>
+                    <strong>Filters:</strong> Price &lt; KC Lower + RSI(14) &lt; 30
+                </div>
+                
+                <div class="bg-[#111827] rounded-xl border border-gray-700 p-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Lookback Days</label>
+                            <input type="number" id="candlestick-lookback" value="${candlestickLookbackDays}" min="30" max="365" 
+                                onchange="candlestickLookbackDays=parseInt(this.value)"
+                                class="w-full bg-[#1f2937] border border-gray-600 rounded px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Filter Mode</label>
+                            <select id="candlestick-filter" onchange="candlestickFilterMode=this.value"
+                                class="w-full bg-[#1f2937] border border-gray-600 rounded px-3 py-2">
+                                <option value="all" ${candlestickFilterMode === 'all' ? 'selected' : ''}>Show All Patterns</option>
+                                <option value="filtered_only" ${candlestickFilterMode === 'filtered_only' ? 'selected' : ''}>Filtered Only (KC+RSI)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Selected: ${candlestickSelectedStocks.length}</label>
+                            <div class="flex gap-2">
+                                <button onclick="candlestickSelectedStocks=[...document.querySelectorAll('#candlestick-stocks input:checked')].map(e=>e.value); toast('Selected '+candlestickSelectedStocks.length+' stocks')" 
+                                    class="px-3 py-2 bg-gray-700 rounded hover:bg-gray-600 text-sm">Update Selection</button>
+                                <button onclick="runCandlestickScreener()" 
+                                    class="px-4 py-2 bg-blue-600 rounded hover:bg-blue-500 font-medium ${candlestickLoading ? 'opacity-50' : ''}">
+                                    ${candlestickLoading ? '⏳ Scanning...' : '🔍 Scan'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="border border-gray-700 rounded p-2 max-h-32 overflow-y-auto" id="candlestick-stocks">
+                        <div class="flex flex-wrap gap-1">
+                            ${stocks.map(s => `
+                                <label class="flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-700 ${candlestickSelectedStocks.includes(s) ? 'bg-blue-600/30' : ''}">
+                                    <input type="checkbox" value="${s}" ${candlestickSelectedStocks.includes(s) ? 'checked' : ''} class="w-3 h-3">
+                                    ${s}
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+                
+                ${resultsHtml}
+            </div>
+        `;
+    }
+    
+    async function runCandlestickScreener() {
+        candlestickLoading = true;
+        render();
+        
+        try {
+            const market = document.getElementById('market')?.value || 'US';
+            const symbols = candlestickSelectedStocks.map(s => market === 'IN' ? s + '.NS' : s);
+            
+            const res = await fetch('/api/v2/screener/candlestick/run', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    symbols: symbols,
+                    lookback_days: candlestickLookbackDays,
+                    market: market,
+                    filter_mode: candlestickFilterMode
+                })
+            });
+            
+            const data = await res.json();
+            candlestickResults = data.signals || [];
+            toast(`Found ${candlestickResults.length} candlestick signals`, 'success');
+        } catch (err) {
+            toast('Error running screener: ' + err.message, 'error');
+        } finally {
+            candlestickLoading = false;
+            render();
+        }
+    }
+
+    // ========== RSI + MACD SCREENER ==========
+    let rsiMacdResults = [];
+    let rsiMacdLoading = false;
+    let rsiMacdSelectedStocks = [];
+    let rsiMacdLookbackDays = 180;
+    
+    function rsiMacdScreenerView() {
+        const market = document.getElementById('market')?.value || 'US';
+        const stocks = market === 'US' ? [
+            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AMD', 'AVGO', 'NFLX',
+            'COST', 'PEP', 'ADBE', 'CSCO', 'INTC', 'QCOM', 'TXN', 'INTU', 'AMAT', 'MU',
+            'LRCX', 'KLAC', 'SNPS', 'CDNS', 'MRVL', 'ON', 'NXPI', 'ADI', 'MCHP', 'FTNT',
+            'VRTX', 'CHTR', 'ASML', 'CRWD', 'MNST', 'TEAM', 'PAYX', 'AEP', 'CPRT', 'PCAR',
+            'AMGN', 'MRNA', 'XEL', 'WDAY', 'ABNB', 'MDLZ', 'ANSS', 'DDOG', 'ODFL', 'GOOG'
+        ] : [
+            'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'HINDUNILVR', 'SBIN', 
+            'BHARTIARTL', 'ITC', 'KOTAKBANK', 'LT', 'AXISBANK', 'ASIANPAINT', 'MARUTI', 
+            'TITAN', 'SUNPHARMA', 'ULTRACEMCO', 'BAJFINANCE', 'WIPRO', 'HCLTECH',
+            'TATAMOTORS', 'POWERGRID', 'NTPC', 'M&M', 'JSWSTEEL'
+        ];
+        
+        if (rsiMacdSelectedStocks.length === 0) rsiMacdSelectedStocks = stocks.slice(0, 20);
+        
+        const resultsHtml = rsiMacdResults.length > 0 ? `
+            <div class="bg-[#111827] rounded-xl border border-gray-700 overflow-hidden mt-4">
+                <div class="p-4 border-b border-gray-700">
+                    <h3 class="font-semibold">Results: ${rsiMacdResults.length} signals found</h3>
+                </div>
+                <div class="overflow-x-auto max-h-96">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-800 sticky top-0">
+                            <tr>
+                                <th class="px-3 py-2 text-left">Symbol</th>
+                                <th class="px-3 py-2 text-left">Date</th>
+                                <th class="px-3 py-2 text-right">Close</th>
+                                <th class="px-3 py-2 text-left">Signal Type</th>
+                                <th class="px-3 py-2 text-right">RSI</th>
+                                <th class="px-3 py-2 text-right">RSI Δ</th>
+                                <th class="px-3 py-2 text-right">MACD</th>
+                                <th class="px-3 py-2 text-right">MACD Hist</th>
+                                <th class="px-3 py-2 text-right">Hist Δ</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-700">
+                            ${rsiMacdResults.slice(0, 100).map(s => `
+                                <tr class="hover:bg-gray-700/50 ${s.conditions?.macd_crossing_up ? 'bg-green-900/20' : ''}">
+                                    <td class="px-3 py-2 font-medium text-blue-400">${s.symbol}</td>
+                                    <td class="px-3 py-2">${s.date}</td>
+                                    <td class="px-3 py-2 text-right">$${s.close}</td>
+                                    <td class="px-3 py-2">
+                                        <span class="px-2 py-0.5 text-xs rounded ${s.conditions?.macd_crossing_up ? 'bg-green-600/30 text-green-400' : 'bg-blue-600/30 text-blue-400'}">
+                                            ${s.signal_type || 'RSI+MACD'}
+                                        </span>
+                                    </td>
+                                    <td class="px-3 py-2 text-right text-green-400 font-medium">${s.rsi}</td>
+                                    <td class="px-3 py-2 text-right ${s.rsi_change > 0 ? 'text-green-400' : 'text-red-400'}">${s.rsi_change > 0 ? '+' : ''}${s.rsi_change}</td>
+                                    <td class="px-3 py-2 text-right">${s.macd}</td>
+                                    <td class="px-3 py-2 text-right">${s.macd_hist}</td>
+                                    <td class="px-3 py-2 text-right ${s.macd_hist_change > 0 ? 'text-green-400' : 'text-red-400'}">${s.macd_hist_change > 0 ? '+' : ''}${s.macd_hist_change}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        ` : '';
+        
+        return `
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold">📈 RSI + MACD Indicator Screener</h2>
+                </div>
+                
+                <div class="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-sm">
+                    <strong>Filter Conditions (ALL must be TRUE):</strong><br>
+                    • RSI(14) &lt; 30 (Oversold)<br>
+                    • RSI is Increasing (today &gt; yesterday)<br>
+                    • MACD pointing up OR crossing up
+                </div>
+                
+                <div class="bg-[#111827] rounded-xl border border-gray-700 p-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Lookback Days</label>
+                            <input type="number" id="rsimacd-lookback" value="${rsiMacdLookbackDays}" min="30" max="365" 
+                                onchange="rsiMacdLookbackDays=parseInt(this.value)"
+                                class="w-full bg-[#1f2937] border border-gray-600 rounded px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Market</label>
+                            <div class="py-2 text-gray-400">Using: ${market === 'US' ? '🇺🇸 NASDAQ' : '🇮🇳 NSE'}</div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Selected: ${rsiMacdSelectedStocks.length}</label>
+                            <div class="flex gap-2">
+                                <button onclick="rsiMacdSelectedStocks=[...document.querySelectorAll('#rsimacd-stocks input:checked')].map(e=>e.value); toast('Selected '+rsiMacdSelectedStocks.length+' stocks')" 
+                                    class="px-3 py-2 bg-gray-700 rounded hover:bg-gray-600 text-sm">Update Selection</button>
+                                <button onclick="runRsiMacdScreener()" 
+                                    class="px-4 py-2 bg-green-600 rounded hover:bg-green-500 font-medium ${rsiMacdLoading ? 'opacity-50' : ''}">
+                                    ${rsiMacdLoading ? '⏳ Scanning...' : '🔍 Scan'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="border border-gray-700 rounded p-2 max-h-32 overflow-y-auto" id="rsimacd-stocks">
+                        <div class="flex flex-wrap gap-1">
+                            ${stocks.map(s => `
+                                <label class="flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-700 ${rsiMacdSelectedStocks.includes(s) ? 'bg-green-600/30' : ''}">
+                                    <input type="checkbox" value="${s}" ${rsiMacdSelectedStocks.includes(s) ? 'checked' : ''} class="w-3 h-3">
+                                    ${s}
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+                
+                ${resultsHtml}
+            </div>
+        `;
+    }
+    
+    async function runRsiMacdScreener() {
+        rsiMacdLoading = true;
+        render();
+        
+        try {
+            const market = document.getElementById('market')?.value || 'US';
+            const symbols = rsiMacdSelectedStocks.map(s => market === 'IN' ? s + '.NS' : s);
+            
+            const res = await fetch('/api/v2/screener/rsi-macd/run', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    symbols: symbols,
+                    lookback_days: rsiMacdLookbackDays,
+                    market: market
+                })
+            });
+            
+            const data = await res.json();
+            rsiMacdResults = data.signals || [];
+            toast(`Found ${rsiMacdResults.length} RSI+MACD signals`, 'success');
+        } catch (err) {
+            toast('Error running screener: ' + err.message, 'error');
+        } finally {
+            rsiMacdLoading = false;
+            render();
+        }
+    }
 
     // ========== TRADE BILL ==========
     function tradeBillView() {

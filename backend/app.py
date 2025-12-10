@@ -17,6 +17,7 @@ Features v2:
 
 from routes.api_v2 import api_v2
 from routes.api import api
+from routes.screener_api import screener_routes
 from models.database import Database, get_database
 from flask import Flask, render_template
 import os
@@ -45,6 +46,7 @@ def create_app():
     # Register API blueprints
     app.register_blueprint(api, url_prefix='/api')      # Original API
     app.register_blueprint(api_v2, url_prefix='/api/v2')  # Enhanced v2 API
+    app.register_blueprint(screener_routes, url_prefix='/api/v2/screener')  # Additional screeners
 
     # Initialize database (creates tables and default data)
     with app.app_context():
