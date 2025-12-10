@@ -29,7 +29,7 @@ def calculate_rsi(close: pd.Series, period: int = 14) -> pd.Series:
     delta = close.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    
+
     rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
     return rsi
@@ -42,7 +42,7 @@ def calculate_macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int
     macd_line = ema_fast - ema_slow
     signal_line = calculate_ema(macd_line, signal)
     histogram = macd_line - signal_line
-    
+
     return {
         'macd_line': macd_line,
         'signal_line': signal_line,
@@ -55,10 +55,10 @@ def calculate_stochastic(high: pd.Series, low: pd.Series, close: pd.Series,
     """Calculate Stochastic Oscillator"""
     lowest_low = low.rolling(window=k_period).min()
     highest_high = high.rolling(window=k_period).max()
-    
+
     stoch_k = 100 * ((close - lowest_low) / (highest_high - lowest_low))
     stoch_d = stoch_k.rolling(window=d_period).mean()
-    
+
     return {
         'stoch_k': stoch_k,
         'stoch_d': stoch_d
@@ -74,16 +74,16 @@ def calculate_atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int
     return tr.rolling(window=period).mean()
 
 
-def calculate_keltner_channel(high: pd.Series, low: pd.Series, close: pd.Series, 
-                               ema_period: int = 20, atr_period: int = 10, 
-                               atr_mult: float = 1.0) -> Dict:
+def calculate_keltner_channel(high: pd.Series, low: pd.Series, close: pd.Series,
+                              ema_period: int = 20, atr_period: int = 10,
+                              atr_mult: float = 1.0) -> Dict:
     """Calculate Keltner Channel"""
     middle = calculate_ema(close, ema_period)
     atr = calculate_atr(high, low, close, atr_period)
-    
+
     upper = middle + (atr_mult * atr)
     lower = middle - (atr_mult * atr)
-    
+
     return {
         'kc_upper': upper,
         'kc_middle': middle,
@@ -102,30 +102,30 @@ def calculate_all_indicators(df: pd.DataFrame) -> Dict:
     """Calculate all required indicators for a dataframe"""
     if len(df) < 30:
         return {}
-    
+
     # RSI
     rsi = calculate_rsi(df['Close'], 14)
-    
+
     # MACD
     macd = calculate_macd(df['Close'], 12, 26, 9)
-    
+
     # Stochastic
     stoch = calculate_stochastic(df['High'], df['Low'], df['Close'], 14, 3)
-    
+
     # Keltner Channel (20, 10, 1)
     kc = calculate_keltner_channel(
         df['High'], df['Low'], df['Close'],
         ema_period=20, atr_period=10, atr_mult=1.0
     )
-    
+
     # Force Index
     force_index = None
     if 'Volume' in df.columns:
         force_index = calculate_force_index(df['Close'], df['Volume'], 2)
-    
+
     # EMA 20
     ema_20 = calculate_ema(df['Close'], 20)
-    
+
     return {
         'rsi': rsi,
         'macd_line': macd['macd_line'],
@@ -145,12 +145,12 @@ def calculate_all_indicators(df: pd.DataFrame) -> Dict:
 def check_rsi_macd_conditions(indicators: Dict, idx: int) -> Dict:
     """
     Check RSI + MACD filter conditions for a specific index
-    
+
     Conditions:
     1. RSI(14) < 30 (Oversold)
     2. RSI is Increasing (today > yesterday)
     3. MACD pointing up OR crossing up
-    
+
     Returns:
         Dict with condition status and details
     """
@@ -162,59 +162,62 @@ def check_rsi_macd_conditions(indicators: Dict, idx: int) -> Dict:
         'all_conditions_met': False,
         'details': []
     }
-    
+
     if idx < 1:
         return result
-    
+
     # Get current and previous values
     rsi_current = indicators['rsi'].iloc[idx]
     rsi_prev = indicators['rsi'].iloc[idx - 1]
-    
+
     macd_current = indicators['macd_line'].iloc[idx]
     macd_prev = indicators['macd_line'].iloc[idx - 1]
-    
+
     signal_current = indicators['signal_line'].iloc[idx]
     signal_prev = indicators['signal_line'].iloc[idx - 1]
-    
+
     hist_current = indicators['macd_hist'].iloc[idx]
     hist_prev = indicators['macd_hist'].iloc[idx - 1]
-    
+
     # Check NaN values
     if pd.isna(rsi_current) or pd.isna(rsi_prev):
         return result
     if pd.isna(macd_current) or pd.isna(hist_current):
         return result
-    
+
     # Condition 1: RSI < 30
     result['rsi_oversold'] = rsi_current < 30
     if result['rsi_oversold']:
         result['details'].append(f'RSI oversold: {rsi_current:.1f} < 30')
-    
+
     # Condition 2: RSI Increasing
     result['rsi_increasing'] = rsi_current > rsi_prev
     if result['rsi_increasing']:
-        result['details'].append(f'RSI increasing: {rsi_prev:.1f} → {rsi_current:.1f}')
-    
+        result['details'].append(
+            f'RSI increasing: {rsi_prev:.1f} → {rsi_current:.1f}')
+
     # Condition 3a: MACD Histogram pointing up (increasing)
     result['macd_pointing_up'] = hist_current > hist_prev
     if result['macd_pointing_up']:
-        result['details'].append(f'MACD histogram ↑: {hist_prev:.4f} → {hist_current:.4f}')
-    
+        result['details'].append(
+            f'MACD histogram ↑: {hist_prev:.4f} → {hist_current:.4f}')
+
     # Condition 3b: MACD Line crossing above Signal Line
     macd_above_signal_now = macd_current > signal_current
     macd_below_signal_prev = macd_prev <= signal_prev
     result['macd_crossing_up'] = macd_above_signal_now and macd_below_signal_prev
     if result['macd_crossing_up']:
-        result['details'].append(f'MACD crossover ↑: MACD({macd_current:.4f}) > Signal({signal_current:.4f})')
-    
+        result['details'].append(
+            f'MACD crossover ↑: MACD({macd_current:.4f}) > Signal({signal_current:.4f})')
+
     # Combined: RSI < 30 AND RSI increasing AND (MACD pointing up OR crossing up)
     macd_condition = result['macd_pointing_up'] or result['macd_crossing_up']
     result['all_conditions_met'] = (
-        result['rsi_oversold'] and 
-        result['rsi_increasing'] and 
+        result['rsi_oversold'] and
+        result['rsi_increasing'] and
         macd_condition
     )
-    
+
     return result
 
 
@@ -225,37 +228,37 @@ def scan_stock_rsi_macd_historical(
 ) -> List[Dict]:
     """
     Scan a single stock's history for RSI + MACD signals
-    
+
     Args:
         symbol: Stock ticker
         hist: Historical OHLCV dataframe
         lookback_days: Number of days to scan
-    
+
     Returns:
         List of signals matching all conditions with indicator values
     """
     if hist is None or len(hist) < 50:
         return []
-    
+
     signals = []
-    
+
     # Calculate all indicators
     indicators = calculate_all_indicators(hist)
     if not indicators:
         return []
-    
+
     # Scan each day (starting from day 35 to ensure indicator stability)
     for idx in range(35, len(hist)):
         current_row = hist.iloc[idx]
         date = hist.index[idx]
-        
+
         # Check conditions
         conditions = check_rsi_macd_conditions(indicators, idx)
-        
+
         # Only include if all conditions are met
         if not conditions['all_conditions_met']:
             continue
-        
+
         # Get all indicator values
         rsi_val = float(indicators['rsi'].iloc[idx])
         rsi_prev = float(indicators['rsi'].iloc[idx - 1])
@@ -263,63 +266,69 @@ def scan_stock_rsi_macd_historical(
         signal_val = float(indicators['signal_line'].iloc[idx])
         macd_hist = float(indicators['macd_hist'].iloc[idx])
         macd_hist_prev = float(indicators['macd_hist'].iloc[idx - 1])
-        stoch_k = float(indicators['stoch_k'].iloc[idx]) if not pd.isna(indicators['stoch_k'].iloc[idx]) else None
-        stoch_d = float(indicators['stoch_d'].iloc[idx]) if not pd.isna(indicators['stoch_d'].iloc[idx]) else None
-        kc_lower = float(indicators['kc_lower'].iloc[idx]) if not pd.isna(indicators['kc_lower'].iloc[idx]) else None
-        kc_middle = float(indicators['kc_middle'].iloc[idx]) if not pd.isna(indicators['kc_middle'].iloc[idx]) else None
-        kc_upper = float(indicators['kc_upper'].iloc[idx]) if not pd.isna(indicators['kc_upper'].iloc[idx]) else None
-        ema_20 = float(indicators['ema_20'].iloc[idx]) if not pd.isna(indicators['ema_20'].iloc[idx]) else None
-        
+        stoch_k = float(indicators['stoch_k'].iloc[idx]) if not pd.isna(
+            indicators['stoch_k'].iloc[idx]) else None
+        stoch_d = float(indicators['stoch_d'].iloc[idx]) if not pd.isna(
+            indicators['stoch_d'].iloc[idx]) else None
+        kc_lower = float(indicators['kc_lower'].iloc[idx]) if not pd.isna(
+            indicators['kc_lower'].iloc[idx]) else None
+        kc_middle = float(indicators['kc_middle'].iloc[idx]) if not pd.isna(
+            indicators['kc_middle'].iloc[idx]) else None
+        kc_upper = float(indicators['kc_upper'].iloc[idx]) if not pd.isna(
+            indicators['kc_upper'].iloc[idx]) else None
+        ema_20 = float(indicators['ema_20'].iloc[idx]) if not pd.isna(
+            indicators['ema_20'].iloc[idx]) else None
+
         force_idx_val = None
         if indicators.get('force_index') is not None:
             fi = indicators['force_index'].iloc[idx]
             if not pd.isna(fi):
                 force_idx_val = float(fi)
-        
+
         close_price = float(current_row['Close'])
-        
+
         # Determine signal type
         signal_type = 'RSI + MACD Alignment'
         if conditions['macd_crossing_up']:
             signal_type = 'RSI Oversold + MACD Crossover'
         elif conditions['macd_pointing_up']:
             signal_type = 'RSI Oversold + MACD Rising'
-        
+
         signal = {
             'symbol': symbol,
             'date': str(date)[:10] if hasattr(date, 'strftime') else str(date)[:10],
             'signal_type': signal_type,
-            'close': round(close_price, 2),
+            'close': round(float(close_price), 2),
             # RSI values
-            'rsi': round(rsi_val, 1),
-            'rsi_prev': round(rsi_prev, 1),
-            'rsi_change': round(rsi_val - rsi_prev, 2),
+            'rsi': round(float(rsi_val), 1),
+            'rsi_prev': round(float(rsi_prev), 1),
+            'rsi_change': round(float(rsi_val - rsi_prev), 2),
             # MACD values
-            'macd': round(macd_val, 4),
-            'macd_signal': round(signal_val, 4),
-            'macd_hist': round(macd_hist, 4),
-            'macd_hist_prev': round(macd_hist_prev, 4),
-            'macd_hist_change': round(macd_hist - macd_hist_prev, 4),
+            'macd': round(float(macd_val), 4),
+            'macd_signal': round(float(signal_val), 4),
+            'macd_hist': round(float(macd_hist), 4),
+            'macd_hist_prev': round(float(macd_hist_prev), 4),
+            'macd_hist_change': round(float(macd_hist - macd_hist_prev), 4),
             # Other indicators
-            'stoch_k': round(stoch_k, 1) if stoch_k else None,
-            'stoch_d': round(stoch_d, 1) if stoch_d else None,
-            'kc_lower': round(kc_lower, 2) if kc_lower else None,
-            'kc_middle': round(kc_middle, 2) if kc_middle else None,
-            'kc_upper': round(kc_upper, 2) if kc_upper else None,
-            'ema_20': round(ema_20, 2) if ema_20 else None,
-            'force_index': round(force_idx_val, 0) if force_idx_val else None,
+            'stoch_k': round(float(stoch_k), 1) if stoch_k else None,
+            'stoch_d': round(float(stoch_d), 1) if stoch_d else None,
+            'kc_lower': round(float(kc_lower), 2) if kc_lower else None,
+            'kc_middle': round(float(kc_middle), 2) if kc_middle else None,
+            'kc_upper': round(float(kc_upper), 2) if kc_upper else None,
+            'ema_20': round(float(ema_20), 2) if ema_20 else None,
+            'force_index': round(float(force_idx_val), 0) if force_idx_val else None,
             # Condition details
             'conditions': {
-                'rsi_oversold': conditions['rsi_oversold'],
-                'rsi_increasing': conditions['rsi_increasing'],
-                'macd_pointing_up': conditions['macd_pointing_up'],
-                'macd_crossing_up': conditions['macd_crossing_up']
+                'rsi_oversold': bool(conditions['rsi_oversold']),
+                'rsi_increasing': bool(conditions['rsi_increasing']),
+                'macd_pointing_up': bool(conditions['macd_pointing_up']),
+                'macd_crossing_up': bool(conditions['macd_crossing_up'])
             },
-            'condition_details': conditions['details']
+            'condition_details': str(conditions['details'])
         }
-        
+
         signals.append(signal)
-    
+
     return signals
 
 
@@ -330,42 +339,46 @@ def run_rsi_macd_screener(
 ) -> Dict:
     """
     Run RSI + MACD screener across multiple symbols
-    
+
     Args:
         symbols: List of stock tickers
         hist_data: Dict of symbol -> DataFrame with OHLCV data
         lookback_days: Number of days to scan
-    
+
     Returns:
         Dict with signals, summary, and metadata
     """
     all_signals = []
     symbols_with_signals = 0
-    
+
     for symbol in symbols:
         try:
             hist = hist_data.get(symbol)
             if hist is None or len(hist) < 50:
                 continue
-            
-            signals = scan_stock_rsi_macd_historical(symbol, hist, lookback_days)
-            
+
+            signals = scan_stock_rsi_macd_historical(
+                symbol, hist, lookback_days)
+
             if signals:
                 all_signals.extend(signals)
                 symbols_with_signals += 1
-                    
+
         except Exception as e:
             print(f"Error scanning {symbol}: {e}")
-    
+
     # Sort by date descending
     all_signals.sort(key=lambda x: x['date'], reverse=True)
-    
+
     # Summary stats
-    crossover_count = len([s for s in all_signals if s['conditions']['macd_crossing_up']])
-    rising_count = len([s for s in all_signals if s['conditions']['macd_pointing_up'] and not s['conditions']['macd_crossing_up']])
-    
-    avg_rsi = sum(s['rsi'] for s in all_signals) / len(all_signals) if all_signals else 0
-    
+    crossover_count = len(
+        [s for s in all_signals if s['conditions']['macd_crossing_up']])
+    rising_count = len([s for s in all_signals if s['conditions']
+                       ['macd_pointing_up'] and not s['conditions']['macd_crossing_up']])
+
+    avg_rsi = sum(s['rsi'] for s in all_signals) / \
+        len(all_signals) if all_signals else 0
+
     summary = {
         'total_signals': len(all_signals),
         'crossover_signals': crossover_count,
@@ -373,7 +386,7 @@ def run_rsi_macd_screener(
         'avg_rsi_at_signal': round(avg_rsi, 1),
         'symbols_with_signals': symbols_with_signals
     }
-    
+
     return {
         'signals': all_signals,
         'summary': summary,

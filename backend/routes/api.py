@@ -1275,3 +1275,5 @@ def get_backtest_stocks():
         'stocks': [s['symbol'] for s in stocks],
         'count': len(stocks)
     })
+
+

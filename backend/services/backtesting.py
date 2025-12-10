@@ -718,3 +718,5 @@ def run_portfolio_backtest(
         'individual_results': results,
         'all_trades': sorted(all_trades, key=lambda x: x.get('signal_date', ''))
     }
+
+

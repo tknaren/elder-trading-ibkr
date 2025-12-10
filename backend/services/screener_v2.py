@@ -1233,3 +1233,5 @@ def save_indicators_to_cache(symbol: str, hist: pd.DataFrame, indicators: Dict, 
     except Exception as e:
         print(f"❌ {symbol}: Error saving indicators to cache: {e}")
         return False
+
+

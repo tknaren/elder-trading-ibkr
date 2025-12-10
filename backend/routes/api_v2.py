@@ -876,3 +876,5 @@ def scan_single_stock_history(symbol):
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
