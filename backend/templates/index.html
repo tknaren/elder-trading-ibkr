@@ -2293,13 +2293,18 @@
             allSignals = result.signals || [];
             currentPage = 1;
             
-            displaySummary(result.summary, result.symbols_scanned, result.symbols_with_signals);
+            displaySummary(result.summary, result.symbols_scanned, result.symbols_with_signals, result.diagnostics);
             renderSignalsTable();
             
             document.getElementById('hs-results').style.display = 'block';
             document.getElementById('export-btn').style.display = allSignals.length > 0 ? 'inline-block' : 'none';
             
-            toast(`Scan complete! Found ${allSignals.length} signals`, 'success');
+            // Show warning if no data was fetched
+            if (result.diagnostics && result.diagnostics.symbols_with_data === 0) {
+                toast('⚠️ No data available! Make sure IBKR Gateway is connected.', 'warning');
+            } else {
+                toast(`Scan complete! Found ${allSignals.length} signals`, 'success');
+            }
         } catch(e) {
             toast('Error: ' + e.message, 'error');
         } finally {
@@ -2308,23 +2313,40 @@
         }
     }
     
-    function displaySummary(summary, scanned, withSignals) {
+    function displaySummary(summary, scanned, withSignals, diagnostics) {
         const summaryEl = document.getElementById('hs-summary');
+        
+        // Check if we have data issues
+        const hasDataIssue = diagnostics && diagnostics.symbols_with_data === 0;
+        
         const stats = [
             {label: 'Total Signals', value: summary.total_signals, icon: '📊', color: 'text-blue-400'},
             {label: 'A-Trades', value: summary.a_trades, icon: '⭐', color: 'text-yellow-400'},
             {label: 'B-Trades', value: summary.b_trades, icon: '📈', color: 'text-green-400'},
-            {label: 'Avg Score', value: summary.avg_score, icon: '🎯', color: 'text-purple-400'},
-            {label: 'Stocks w/ Signals', value: `${withSignals}/${scanned}`, icon: '📋', color: 'text-cyan-400'}
+            {label: 'Avg Score', value: summary.avg_score || '-', icon: '🎯', color: 'text-purple-400'},
+            {label: 'Stocks w/ Data', value: diagnostics ? `${diagnostics.symbols_with_data}/${scanned}` : `${withSignals}/${scanned}`, icon: hasDataIssue ? '⚠️' : '📋', color: hasDataIssue ? 'text-red-400' : 'text-cyan-400'}
         ];
         
-        summaryEl.innerHTML = stats.map(s => `
+        let html = stats.map(s => `
             <div class="bg-[#1f2937] rounded-lg p-4 border border-gray-600 text-center">
                 <div class="text-2xl mb-1">${s.icon}</div>
                 <div class="text-gray-400 text-xs">${s.label}</div>
                 <div class="text-lg font-bold ${s.color}">${s.value}</div>
             </div>
         `).join('');
+        
+        // Add warning message if no data
+        if (hasDataIssue) {
+            html += `
+                <div class="col-span-full mt-4 p-4 bg-red-900/30 border border-red-700 rounded-lg text-center">
+                    <p class="text-red-400 font-semibold">⚠️ No Data Available</p>
+                    <p class="text-sm text-gray-400 mt-1">Make sure IBKR Gateway is running and authenticated.</p>
+                    <p class="text-xs text-gray-500 mt-1">The historical screener needs live IBKR connection to fetch stock data.</p>
+                </div>
+            `;
+        }
+        
+        summaryEl.innerHTML = html;
     }
     
     function getVisibleColumns() {

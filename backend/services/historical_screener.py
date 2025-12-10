@@ -133,16 +133,17 @@ def analyze_weekly_at_date(hist: pd.DataFrame, analysis_date: pd.Timestamp) -> D
     """
     hist_slice = hist[hist.index <= analysis_date]
     
-    if len(hist_slice) < 100:
+    # Need at least 50 daily bars for reliable weekly analysis
+    if len(hist_slice) < 50:
         return {'screen1_score': 0, 'weekly_bullish': False}
     
-    # Resample to weekly
-    weekly = hist_slice.resample('W').agg({
+    # Resample to weekly (use Friday as week end to match market weeks)
+    weekly = hist_slice.resample('W-FRI').agg({
         'Open': 'first', 'High': 'max', 'Low': 'min',
         'Close': 'last', 'Volume': 'sum'
     }).dropna()
     
-    if len(weekly) < 20:
+    if len(weekly) < 10:  # Need at least 10 weeks for indicators
         return {'screen1_score': 0, 'weekly_bullish': False}
     
     closes = weekly['Close']
@@ -159,9 +160,9 @@ def analyze_weekly_at_date(hist: pd.DataFrame, analysis_date: pd.Timestamp) -> D
     # 1. MACD-H Rising Score
     macd_h_score = 0
     if macd_h_rising:
-        if prev_macd_h < 0:  # Spring
+        if prev_macd_h < 0:  # Spring - rising from below zero
             macd_h_score = 2
-        else:  # Summer
+        else:  # Summer - rising from above zero
             macd_h_score = 1
     
     # 2. MACD Line vs Signal
@@ -186,7 +187,7 @@ def analyze_weekly_at_date(hist: pd.DataFrame, analysis_date: pd.Timestamp) -> D
     
     return {
         'screen1_score': screen1_score,
-        'weekly_bullish': screen1_score >= 1,
+        'weekly_bullish': screen1_score >= 1,  # Any score = can proceed
         'macd_h_score': macd_h_score,
         'macd_line_score': macd_line_score,
         'ema_alignment_score': ema_alignment_score,
@@ -196,6 +197,7 @@ def analyze_weekly_at_date(hist: pd.DataFrame, analysis_date: pd.Timestamp) -> D
         'weekly_ema_20': round(ema_20, 2),
         'weekly_ema_50': round(ema_50, 2),
         'weekly_ema_100': round(ema_100, 2),
+        'macd_h_rising': macd_h_rising,
     }
 
 
@@ -387,40 +389,91 @@ def calculate_score_at_date(hist: pd.DataFrame, analysis_date: pd.Timestamp, wee
 def fetch_stock_data(symbol: str, lookback_days: int = 365) -> Optional[pd.DataFrame]:
     """
     Fetch historical data from IBKR or cache
+    Uses the same data source as the live screener
     """
     try:
-        from services.ibkr_client import fetch_stock_data as ibkr_fetch, check_connection
+        from services.ibkr_client import fetch_stock_data as ibkr_fetch
         
-        # Try IBKR first
-        if check_connection():
-            timeframe = '1d'
-            bars_needed = lookback_days + 200  # Extra for indicator warmup
-            hist = ibkr_fetch(symbol, timeframe, bars_needed)
+        # Try IBKR fetch (this handles caching internally)
+        data = ibkr_fetch(symbol)  # Returns dict with 'history' key
+        
+        if data is not None and 'history' in data:
+            hist = data['history']
             if hist is not None and len(hist) > 100:
+                print(f"✅ {symbol}: Got {len(hist)} bars from IBKR")
                 return hist
+            else:
+                print(f"⚠️ {symbol}: IBKR returned insufficient data ({len(hist) if hist is not None else 0} bars)")
+        else:
+            print(f"⚠️ {symbol}: IBKR fetch returned None or no history")
         
-        # Fallback to cache
+        # Fall back to direct cache lookup
         from models.database import get_database
         db = get_database().get_connection()
         
-        result = db.execute('''
-            SELECT data FROM stock_historical_data 
-            WHERE symbol = ? ORDER BY fetched_at DESC LIMIT 1
-        ''', (symbol,)).fetchone()
+        cached_rows = db.execute('''
+            SELECT date, open, high, low, close, volume 
+            FROM stock_historical_data 
+            WHERE symbol = ? 
+            ORDER BY date ASC
+        ''', (symbol,)).fetchall()
         
-        if result:
-            import json
-            data = json.loads(result[0])
-            df = pd.DataFrame(data)
-            if 'Date' in df.columns:
-                df['Date'] = pd.to_datetime(df['Date'])
-                df.set_index('Date', inplace=True)
-            return df
+        if cached_rows and len(cached_rows) >= 100:
+            print(f"📦 {symbol}: Using {len(cached_rows)} cached rows")
+            hist = pd.DataFrame([
+                {
+                    'Date': row['date'],
+                    'Open': row['open'],
+                    'High': row['high'],
+                    'Low': row['low'],
+                    'Close': row['close'],
+                    'Volume': row['volume']
+                }
+                for row in cached_rows
+            ])
+            hist['Date'] = pd.to_datetime(hist['Date'])
+            hist.set_index('Date', inplace=True)
+            hist = hist.sort_index()
+            return hist
         
+        print(f"❌ {symbol}: No data available (IBKR down and no cache)")
         return None
         
     except Exception as e:
-        print(f"Error fetching {symbol}: {e}")
+        print(f"❌ Error fetching {symbol}: {e}")
+        
+        # Last resort: try direct cache lookup
+        try:
+            from models.database import get_database
+            db = get_database().get_connection()
+            
+            cached_rows = db.execute('''
+                SELECT date, open, high, low, close, volume 
+                FROM stock_historical_data 
+                WHERE symbol = ? 
+                ORDER BY date ASC
+            ''', (symbol,)).fetchall()
+            
+            if cached_rows and len(cached_rows) >= 100:
+                print(f"📦 {symbol}: Fallback to {len(cached_rows)} cached rows")
+                hist = pd.DataFrame([
+                    {
+                        'Date': row['date'],
+                        'Open': row['open'],
+                        'High': row['high'],
+                        'Low': row['low'],
+                        'Close': row['close'],
+                        'Volume': row['volume']
+                    }
+                    for row in cached_rows
+                ])
+                hist['Date'] = pd.to_datetime(hist['Date'])
+                hist.set_index('Date', inplace=True)
+                hist = hist.sort_index()
+                return hist
+        except Exception as e2:
+            print(f"❌ Cache fallback also failed for {symbol}: {e2}")
+        
         return None
 
 
@@ -428,14 +481,16 @@ def scan_stock_historical(
     symbol: str, 
     lookback_days: int = 180,
     min_score: int = 5
-) -> List[Dict]:
+) -> Optional[List[Dict]]:
     """
     Scan a single stock's history for signals meeting minimum score
+    Returns: List of signals, empty list if no signals found, None if no data
     """
     hist = fetch_stock_data(symbol, lookback_days + 365)  # Extra for indicators
     
     if hist is None or len(hist) < 200:
-        return []
+        print(f"⚠️ {symbol}: Insufficient data ({len(hist) if hist is not None else 0} bars)")
+        return None
     
     # Ensure timezone-naive
     if hist.index.tz is not None:
@@ -449,11 +504,20 @@ def scan_stock_historical(
     scan_dates = hist[(hist.index >= pd.Timestamp(start_date)) & 
                       (hist.index <= pd.Timestamp(end_date))].index
     
+    print(f"📊 {symbol}: Scanning {len(scan_dates)} trading days")
+    
+    dates_analyzed = 0
+    weekly_bullish_count = 0
+    
     for analysis_date in scan_dates:
+        dates_analyzed += 1
+        
         # Analyze weekly
         weekly = analyze_weekly_at_date(hist, analysis_date)
         if not weekly.get('weekly_bullish', False):
             continue
+        
+        weekly_bullish_count += 1
         
         # Calculate full score
         result = calculate_score_at_date(hist, analysis_date, weekly)
@@ -467,6 +531,8 @@ def scan_stock_historical(
                 **result
             }
             signals.append(signal)
+    
+    print(f"✅ {symbol}: Found {len(signals)} signals (weekly bullish on {weekly_bullish_count}/{dates_analyzed} days)")
     
     return signals
 
@@ -485,11 +551,14 @@ def run_historical_screener(
             'signals': [...],
             'summary': {...},
             'symbols_scanned': int,
-            'symbols_with_signals': int
+            'symbols_with_signals': int,
+            'diagnostics': {...}  # Debug info
         }
     """
     all_signals = []
     symbols_with_signals = 0
+    symbols_with_data = 0
+    symbols_failed = []
     
     for i, symbol in enumerate(symbols):
         if progress_callback:
@@ -500,8 +569,12 @@ def run_historical_screener(
             if signals:
                 all_signals.extend(signals)
                 symbols_with_signals += 1
+                symbols_with_data += 1
+            elif signals is not None:  # Empty list means data was available but no signals
+                symbols_with_data += 1
         except Exception as e:
             print(f"Error scanning {symbol}: {e}")
+            symbols_failed.append({'symbol': symbol, 'error': str(e)})
     
     # Sort by date descending, then by score descending
     all_signals.sort(key=lambda x: (x['date'], x['score']), reverse=True)
@@ -515,13 +588,22 @@ def run_historical_screener(
         'avg_score': round(sum(s['score'] for s in all_signals) / len(all_signals), 1) if all_signals else 0,
     }
     
+    # Diagnostics for debugging
+    diagnostics = {
+        'symbols_with_data': symbols_with_data,
+        'symbols_no_data': len(symbols) - symbols_with_data - len(symbols_failed),
+        'symbols_failed': symbols_failed[:10] if symbols_failed else [],  # First 10 failures
+        'data_source': 'IBKR + Cache'
+    }
+    
     return {
         'signals': all_signals,
         'summary': summary,
         'symbols_scanned': len(symbols),
         'symbols_with_signals': symbols_with_signals,
         'lookback_days': lookback_days,
-        'min_score': min_score
+        'min_score': min_score,
+        'diagnostics': diagnostics
     }
 
 
