@@ -1,51 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Elder Trading System v2</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background: #0a0f1a; font-family: 'Inter', sans-serif; }
-        .font-mono { font-family: 'JetBrains Mono', monospace; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .animate-spin { animation: spin 1s linear infinite; }
-    </style>
-</head>
-<body class="bg-[#0a0f1a] text-gray-100 min-h-screen">
-    <div class="flex">
-        <!-- Sidebar -->
-        <aside class="w-56 bg-[#111827] border-r border-gray-700 min-h-screen fixed">
-            <div class="p-4 border-b border-gray-700">
-                <h1 class="font-bold text-lg flex items-center gap-2">📈 Elder Trading</h1>
-                <p class="text-xs text-gray-500">Triple Screen v2.0</p>
-            </div>
-            <nav class="p-2" id="nav"></nav>
-        </aside>
-
-        <!-- Main -->
-        <main class="ml-56 flex-1 min-h-screen">
-            <header class="h-14 bg-[#111827] border-b border-gray-700 px-6 flex items-center justify-between sticky top-0 z-10">
-                <div id="header-stats" class="flex gap-6 text-sm"></div>
-                <div class="flex items-center gap-4">
-                    <div id="ibkr-status" class="text-xs px-2 py-1 rounded"></div>
-                    <select id="market" class="bg-[#1f2937] border border-gray-600 rounded px-3 py-1.5 text-sm">
-                        <option value="US">🇺🇸 NASDAQ</option>
-                        <option value="IN">🇮🇳 NSE</option>
-                    </select>
-                </div>
-            </header>
-            <div class="p-6" id="content"></div>
-        </main>
-    </div>
-
-    <div id="toast" class="fixed bottom-4 right-4 z-50"></div>
-    <div id="modal" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-[#111827] rounded-xl border border-gray-700 max-w-4xl w-full max-h-[90vh] overflow-auto" id="modal-body"></div>
-    </div>
-
-    <script>
+<script>
     console.log('Script starting...');
     const API = '/api';
     let currentTab = 'screener';
@@ -120,6 +73,11 @@
             toast('Export error: ' + e.message, 'error');
         }
     }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadIndicatorFilters();
+    });
 
     function renderNav() {
         document.getElementById('nav').innerHTML = tabs.map(t => `
@@ -3011,16 +2969,9 @@
         setInterval(checkIBKRStatus, 30000);
     }
 
-    console.log('Functions defined, waiting for DOM...');
-    document.addEventListener('DOMContentLoaded', async () => {
-        console.log('DOM loaded, starting init...');
-        await loadIndicatorFilters();
-        console.log('About to call init()...');
-        await init();
-        console.log('Init complete, setting up modal handler...');
-        document.getElementById('modal').onclick = e => { if(e.target.id==='modal') closeModal(); };
-        console.log('Setup complete!');
-    });
+    console.log('About to call init()...');
+    init();
+    console.log('Init called, setting up modal click handler...');
+    document.getElementById('modal').onclick = e => { if(e.target.id==='modal') closeModal(); };
+    console.log('Setup complete!');
     </script>
-</body>
-</html>

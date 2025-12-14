@@ -46,7 +46,6 @@
     </div>
 
     <script>
-    console.log('Script starting...');
     const API = '/api';
     let currentTab = 'screener';
     let selectedStock = null;  // Store stock for trade bill creation
@@ -54,7 +53,6 @@
     let weeklyData = null;
     let checklist = {};
     let isLoading = false;  // Track loading state
-    console.log('Variables initialized');
 
     const tabs = [
         {id:'screener', icon:'🔍', label:'Screener'},
@@ -121,6 +119,11 @@
         }
     }
 
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadIndicatorFilters();
+    });
+
     function renderNav() {
         document.getElementById('nav').innerHTML = tabs.map(t => `
             <button onclick="switchTab('${t.id}')" class="w-full text-left px-3 py-2 rounded-lg mb-1 flex items-center gap-2 ${currentTab===t.id?'bg-blue-600/30 text-blue-400':'text-gray-400 hover:bg-gray-700/50'}">
@@ -142,31 +145,21 @@
 
     async function render() {
         const c = document.getElementById('content');
-        try {
-            if(currentTab==='screener') c.innerHTML = screenView();
-            else if(currentTab==='backtest') c.innerHTML = await backtestView();
-            else if(currentTab==='candlestick-screener') c.innerHTML = candlestickScreenerView();
-            else if(currentTab==='rsi-macd-screener') c.innerHTML = rsiMacdScreenerView();
-            else if(currentTab==='trade-bill') { c.innerHTML = tradeBillView(); triggerTradeBillCalc(); }
-            else if(currentTab==='trade-bills') c.innerHTML = await tradeBillsView();
-            else if(currentTab==='journal-dashboard') c.innerHTML = await journalDashboardView();
-            else if(currentTab==='trade-log') c.innerHTML = await tradeLogView();
-            else if(currentTab==='trade-summary') c.innerHTML = await tradeSummaryView();
-            else if(currentTab==='pnl-tracker') c.innerHTML = await pnlTrackerView();
-            else if(currentTab==='mistakes') c.innerHTML = await mistakesView();
-            else if(currentTab==='favorites') c.innerHTML = await favoritesView();
-            else if(currentTab==='account') c.innerHTML = await accountView();
-            else if(currentTab==='checklist') c.innerHTML = checklistView();
-            else if(currentTab==='settings') c.innerHTML = settingsView();
-        } catch(e) {
-            console.error('Error rendering view:', e);
-            c.innerHTML = `<div class="text-center py-20 text-red-500">
-                <div class="text-6xl mb-4">⚠️</div>
-                <h3 class="text-xl font-semibold">Error loading view</h3>
-                <p class="mt-2 text-gray-400">${e.message}</p>
-                <p class="mt-4 text-sm text-gray-500">Check console for details</p>
-            </div>`;
-        }
+        if(currentTab==='screener') c.innerHTML = screenView();
+        else if(currentTab==='backtest') c.innerHTML = await backtestView();
+        else if(currentTab==='candlestick-screener') c.innerHTML = candlestickScreenerView();
+        else if(currentTab==='rsi-macd-screener') c.innerHTML = rsiMacdScreenerView();
+        else if(currentTab==='trade-bill') { c.innerHTML = tradeBillView(); triggerTradeBillCalc(); }
+        else if(currentTab==='trade-bills') c.innerHTML = await tradeBillsView();
+        else if(currentTab==='journal-dashboard') c.innerHTML = await journalDashboardView();
+        else if(currentTab==='trade-log') c.innerHTML = await tradeLogView();
+        else if(currentTab==='trade-summary') c.innerHTML = await tradeSummaryView();
+        else if(currentTab==='pnl-tracker') c.innerHTML = await pnlTrackerView();
+        else if(currentTab==='mistakes') c.innerHTML = await mistakesView();
+        else if(currentTab==='favorites') c.innerHTML = await favoritesView();
+        else if(currentTab==='account') c.innerHTML = await accountView();
+        else if(currentTab==='checklist') c.innerHTML = checklistView();
+        else if(currentTab==='settings') c.innerHTML = settingsView();
     }
 
     // ========== SCREENER ==========
@@ -2971,56 +2964,38 @@
 
     // ========== INIT ==========
     async function init() {
-        console.log('Starting initialization...');
         try {
-            console.log('Loading account info...');
             const account = await api('GET', '/account/info');
             settings = [account];
-            console.log('Account loaded:', account);
         } catch(e) {
             console.log('Could not load account info:', e);
             settings = [{trading_capital:6000, risk_per_trade:2, currency:'GBP'}];
         }
         
         try {
-            console.log('Loading checklist...');
             const cl = await api('GET', '/checklist');
             checklist = cl.items || {};
-            console.log('Checklist loaded');
         } catch(e) {
             console.log('Could not load checklist:', e);
             checklist = {};
         }
         
         try {
-            console.log('Checking IBKR status...');
             await checkIBKRStatus();
         } catch(e) {
             console.log('Could not check IBKR status:', e);
         }
         
-        console.log('Rendering navigation...');
         renderNav();
-        console.log('Rendering header...');
         renderHeader();
-        console.log('Rendering main content...');
         await render();
-        console.log('Initialization complete!');
         
         // Check IBKR status every 30 seconds
         setInterval(checkIBKRStatus, 30000);
     }
 
-    console.log('Functions defined, waiting for DOM...');
-    document.addEventListener('DOMContentLoaded', async () => {
-        console.log('DOM loaded, starting init...');
-        await loadIndicatorFilters();
-        console.log('About to call init()...');
-        await init();
-        console.log('Init complete, setting up modal handler...');
-        document.getElementById('modal').onclick = e => { if(e.target.id==='modal') closeModal(); };
-        console.log('Setup complete!');
-    });
+    init();
+    document.getElementById('modal').onclick = e => { if(e.target.id==='modal') closeModal(); };
     </script>
 </body>
 </html>
