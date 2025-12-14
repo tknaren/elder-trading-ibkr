@@ -13,6 +13,8 @@ Filter Conditions (All must be TRUE):
 Shows all indicator values in the results grid.
 """
 
+import os
+import csv
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -25,12 +27,16 @@ def calculate_ema(series: pd.Series, period: int) -> pd.Series:
 
 
 def calculate_rsi(close: pd.Series, period: int = 14) -> pd.Series:
-    """Calculate Relative Strength Index"""
+    """Calculate Relative Strength Index using Close prices (Wilder's smoothing)"""
     delta = close.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
 
-    rs = gain / loss
+    # Use Wilder's smoothing (EMA with alpha = 1/period) for RSI calculation
+    avg_gain = gain.ewm(alpha=1/period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1/period, adjust=False).mean()
+
+    rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
@@ -224,7 +230,8 @@ def check_rsi_macd_conditions(indicators: Dict, idx: int) -> Dict:
 def scan_stock_rsi_macd_historical(
     symbol: str,
     hist: pd.DataFrame,
-    lookback_days: int = 180
+    lookback_days: int = 180,
+    stock_info: Dict = None
 ) -> List[Dict]:
     """
     Scan a single stock's history for RSI + MACD signals
@@ -233,6 +240,7 @@ def scan_stock_rsi_macd_historical(
         symbol: Stock ticker
         hist: Historical OHLCV dataframe
         lookback_days: Number of days to scan
+        stock_info: Dict with company info (Name, Market Cap, Sector, Industry)
 
     Returns:
         List of signals matching all conditions with indicator values
@@ -247,8 +255,17 @@ def scan_stock_rsi_macd_historical(
     if not indicators:
         return []
 
+    # Apply lookback period - only scan last N days
+    latest_date = hist.index[-1]
+    cutoff_date = latest_date - pd.Timedelta(days=lookback_days)
+
     # Scan each day (starting from day 35 to ensure indicator stability)
     for idx in range(35, len(hist)):
+        date = hist.index[idx]
+
+        # Skip dates outside lookback period
+        if date < cutoff_date:
+            continue
         current_row = hist.iloc[idx]
         date = hist.index[idx]
 
@@ -296,6 +313,10 @@ def scan_stock_rsi_macd_historical(
 
         signal = {
             'symbol': symbol,
+            'name': stock_info.get('Name', '') if stock_info else '',
+            'market_cap': stock_info.get('Market Cap', '') if stock_info else '',
+            'sector': stock_info.get('Sector', '') if stock_info else '',
+            'industry': stock_info.get('Industry', '') if stock_info else '',
             'date': str(date)[:10] if hasattr(date, 'strftime') else str(date)[:10],
             'signal_type': signal_type,
             'close': round(float(close_price), 2),
@@ -335,7 +356,8 @@ def scan_stock_rsi_macd_historical(
 def run_rsi_macd_screener(
     symbols: List[str],
     hist_data: Dict[str, pd.DataFrame],
-    lookback_days: int = 180
+    lookback_days: int = 180,
+    stock_info_map: Dict[str, Dict] = None
 ) -> Dict:
     """
     Run RSI + MACD screener across multiple symbols
@@ -344,6 +366,7 @@ def run_rsi_macd_screener(
         symbols: List of stock tickers
         hist_data: Dict of symbol -> DataFrame with OHLCV data
         lookback_days: Number of days to scan
+        stock_info_map: Dict of symbol -> company info (Name, Market Cap, Sector, Industry)
 
     Returns:
         Dict with signals, summary, and metadata
@@ -357,8 +380,9 @@ def run_rsi_macd_screener(
             if hist is None or len(hist) < 50:
                 continue
 
+            stock_info = stock_info_map.get(symbol) if stock_info_map else None
             signals = scan_stock_rsi_macd_historical(
-                symbol, hist, lookback_days)
+                symbol, hist, lookback_days, stock_info)
 
             if signals:
                 all_signals.extend(signals)
@@ -395,48 +419,52 @@ def run_rsi_macd_screener(
     }
 
 
-# Stock lists
-NASDAQ_100 = [
-    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AMD', 'AVGO', 'NFLX',
-    'COST', 'PEP', 'ADBE', 'CSCO', 'INTC', 'QCOM', 'TXN', 'INTU', 'AMAT', 'MU',
-    'LRCX', 'KLAC', 'SNPS', 'CDNS', 'MRVL', 'ON', 'NXPI', 'ADI', 'MCHP', 'FTNT',
-    'VRTX', 'CHTR', 'ASML', 'CRWD', 'MNST', 'TEAM', 'PAYX', 'AEP', 'CPRT', 'PCAR',
-    'AMGN', 'MRNA', 'XEL', 'WDAY', 'ABNB', 'MDLZ', 'ANSS', 'DDOG', 'ODFL', 'GOOG',
-    'IDXX', 'ISRG', 'ORLY', 'CTAS', 'SBUX', 'PANW', 'LULU', 'BKNG', 'ADP', 'REGN',
-    'KDP', 'MAR', 'MELI', 'KLAC', 'PYPL', 'SNPS', 'CDNS', 'CEG', 'FAST', 'GEHC',
-    'KHC', 'DXCM', 'CCEP', 'FANG', 'TTWO', 'CDW', 'VRSK', 'DLTR', 'BIIB', 'ILMN',
-    'EA', 'WBD', 'ZS', 'ALGN', 'ENPH', 'SIRI', 'LCID', 'RIVN', 'HOOD', 'COIN',
-    'ARM', 'SMCI', 'CRSP', 'TTD', 'DASH', 'MSTR', 'PLTR', 'ANET', 'MDB', 'DKNG'
-]
-
-NIFTY_100 = [
-    'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
-    'HINDUNILVR.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'ITC.NS', 'KOTAKBANK.NS',
-    'LT.NS', 'AXISBANK.NS', 'ASIANPAINT.NS', 'MARUTI.NS', 'TITAN.NS',
-    'SUNPHARMA.NS', 'ULTRACEMCO.NS', 'BAJFINANCE.NS', 'WIPRO.NS', 'HCLTECH.NS',
-    'TATAMOTORS.NS', 'POWERGRID.NS', 'NTPC.NS', 'M&M.NS', 'JSWSTEEL.NS',
-    'TATASTEEL.NS', 'ADANIENT.NS', 'ONGC.NS', 'COALINDIA.NS', 'GRASIM.NS',
-    'BAJAJFINSV.NS', 'TECHM.NS', 'HINDALCO.NS', 'DIVISLAB.NS', 'DRREDDY.NS',
-    'CIPLA.NS', 'BPCL.NS', 'INDUSINDBK.NS', 'EICHERMOT.NS', 'BRITANNIA.NS',
-    'HEROMOTOCO.NS', 'APOLLOHOSP.NS', 'SBILIFE.NS', 'HDFCLIFE.NS', 'TATACONSUM.NS',
-    'ADANIPORTS.NS', 'LTIM.NS', 'NESTLEIND.NS', 'DABUR.NS', 'PIDILITIND.NS',
-    # Next 50
-    'ABB.NS', 'ACC.NS', 'ADANIGREEN.NS', 'AMBUJACEM.NS', 'AUROPHARMA.NS',
-    'BAJAJHLDNG.NS', 'BANKBARODA.NS', 'BERGEPAINT.NS', 'BOSCHLTD.NS', 'CANBK.NS',
-    'CHOLAFIN.NS', 'COLPAL.NS', 'CONCOR.NS', 'DLF.NS', 'GAIL.NS',
-    'GODREJCP.NS', 'HAL.NS', 'HAVELLS.NS', 'ICICIPRULI.NS', 'INDUSTOWER.NS',
-    'IOC.NS', 'IRCTC.NS', 'JINDALSTEL.NS', 'JUBLFOOD.NS', 'LTF.NS',
-    'LUPIN.NS', 'MCDOWELL-N.NS', 'MARICO.NS', 'MUTHOOTFIN.NS', 'NAUKRI.NS',
-    'NHPC.NS', 'NMDC.NS', 'OBEROIRLTY.NS', 'OFSS.NS', 'PAGEIND.NS',
-    'PEL.NS', 'PFC.NS', 'PIIND.NS', 'PNB.NS', 'POLYCAB.NS',
-    'RECLTD.NS', 'SAIL.NS', 'SRF.NS', 'SIEMENS.NS', 'TATAPOWER.NS',
-    'TORNTPHARM.NS', 'TRENT.NS', 'UPL.NS', 'VBL.NS', 'ZOMATO.NS'
-]
+# Stock list loader
 
 
-def get_stock_list(market: str = 'US') -> List[str]:
-    """Get available stock list"""
+def load_nasdaq_stocks_from_csv():
+    """
+    Load NASDAQ stocks from CSV file with company details
+
+    Returns:
+        Tuple of (symbols: List[str], stock_info_map: Dict[str, Dict])
+        where stock_info_map contains Name, Market Cap, Sector, Industry for each symbol
+    """
+    csv_path = os.path.join(os.path.dirname(__file__),
+                            '..', '..', 'docs', 'nasdaq_screener.csv')
+    symbols = []
+    stock_info_map = {}
+
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                symbol = row.get('Symbol', '').strip()
+                if symbol:
+                    symbols.append(symbol)
+                    stock_info_map[symbol] = {
+                        'Name': row.get('Name', '').strip(),
+                        'Market Cap': row.get('Market Cap', '').strip(),
+                        'Sector': row.get('Sector', '').strip(),
+                        'Industry': row.get('Industry', '').strip()
+                    }
+    except Exception as e:
+        print(f"Error loading NASDAQ stocks from CSV: {e}")
+        # Return empty if file not found or error
+        return [], {}
+
+    return symbols, stock_info_map
+
+
+def get_stock_list(market: str = 'US'):
+    """
+    Get available stock list with company information
+
+    Returns:
+        Tuple of (symbols: List[str], stock_info_map: Dict[str, Dict])
+    """
     if market.upper() == 'US':
-        return NASDAQ_100
+        return load_nasdaq_stocks_from_csv()
     else:
-        return NIFTY_100
+        # For non-US markets, return empty for now
+        return [], {}

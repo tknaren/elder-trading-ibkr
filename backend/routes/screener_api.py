@@ -71,17 +71,29 @@ def fetch_historical_data(symbols: List[str], lookback_days: int = 180) -> Dict[
 @screener_routes.route('/candlestick/stocks', methods=['GET'])
 def get_candlestick_stocks():
     """
-    Get list of available stocks for candlestick screening
+    Get list of available stocks for candlestick screening with company details
     """
     market = request.args.get('market', 'US')
 
     from services.candlestick_screener import get_stock_list
-    stocks = get_stock_list(market)
+    symbols, stock_info_map = get_stock_list(market)
+
+    # Return both symbols and full company info
+    stocks_with_info = []
+    for symbol in symbols:
+        info = stock_info_map.get(symbol, {})
+        stocks_with_info.append({
+            'symbol': symbol,
+            'name': info.get('Name', ''),
+            'market_cap': info.get('Market Cap', ''),
+            'sector': info.get('Sector', ''),
+            'industry': info.get('Industry', '')
+        })
 
     return jsonify({
         'market': market,
-        'stocks': stocks,
-        'count': len(stocks)
+        'stocks': stocks_with_info,
+        'count': len(stocks_with_info)
     })
 
 
@@ -118,9 +130,12 @@ def run_candlestick_screener_endpoint():
         get_stock_list
     )
 
-    # Handle "all" or empty symbols
+    # Handle "all" or empty symbols - load from CSV
     if not symbols or symbols == 'all' or (isinstance(symbols, list) and 'all' in symbols):
-        symbols = get_stock_list(market)
+        symbols, stock_info_map = get_stock_list(market)
+    else:
+        # If specific symbols provided, still load stock info map
+        _, stock_info_map = get_stock_list(market)
 
     # Validate filter_mode
     if filter_mode not in ['all', 'filtered_only', 'patterns_only']:
@@ -136,12 +151,13 @@ def run_candlestick_screener_endpoint():
                 'symbols_requested': len(symbols)
             }), 500
 
-        # Run screener
+        # Run screener with stock info
         result = run_candlestick_screener(
             symbols=list(hist_data.keys()),
             hist_data=hist_data,
             lookback_days=lookback_days,
-            filter_mode=filter_mode
+            filter_mode=filter_mode,
+            stock_info_map=stock_info_map
         )
 
         return jsonify(result)
@@ -213,17 +229,29 @@ def scan_single_candlestick(symbol):
 @screener_routes.route('/rsi-macd/stocks', methods=['GET'])
 def get_rsi_macd_stocks():
     """
-    Get list of available stocks for RSI+MACD screening
+    Get list of available stocks for RSI+MACD screening with company details
     """
     market = request.args.get('market', 'US')
 
     from services.rsi_macd_screener import get_stock_list
-    stocks = get_stock_list(market)
+    symbols, stock_info_map = get_stock_list(market)
+
+    # Return both symbols and full company info
+    stocks_with_info = []
+    for symbol in symbols:
+        info = stock_info_map.get(symbol, {})
+        stocks_with_info.append({
+            'symbol': symbol,
+            'name': info.get('Name', ''),
+            'market_cap': info.get('Market Cap', ''),
+            'sector': info.get('Sector', ''),
+            'industry': info.get('Industry', '')
+        })
 
     return jsonify({
         'market': market,
-        'stocks': stocks,
-        'count': len(stocks)
+        'stocks': stocks_with_info,
+        'count': len(stocks_with_info)
     })
 
 
@@ -258,9 +286,12 @@ def run_rsi_macd_screener_endpoint():
         get_stock_list
     )
 
-    # Handle "all" or empty symbols
+    # Handle "all" or empty symbols - load from CSV
     if not symbols or symbols == 'all' or (isinstance(symbols, list) and 'all' in symbols):
-        symbols = get_stock_list(market)
+        symbols, stock_info_map = get_stock_list(market)
+    else:
+        # If specific symbols provided, still load stock info map
+        _, stock_info_map = get_stock_list(market)
 
     try:
         # Fetch historical data
@@ -272,11 +303,12 @@ def run_rsi_macd_screener_endpoint():
                 'symbols_requested': len(symbols)
             }), 500
 
-        # Run screener
+        # Run screener with stock info
         result = run_rsi_macd_screener(
             symbols=list(hist_data.keys()),
             hist_data=hist_data,
-            lookback_days=lookback_days
+            lookback_days=lookback_days,
+            stock_info_map=stock_info_map
         )
 
         return jsonify(result)
