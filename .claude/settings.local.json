@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python update_candlestick_ui.py:*)",
+      "Bash(python update_backend_rsi.py:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
