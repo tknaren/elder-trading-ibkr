@@ -968,6 +968,8 @@
     let candlestickSelectedStocks = [];
     let candlestickLookbackDays = 180;
     let candlestickFilterMode = 'all';
+    let candlestickKcLevel = -1;
+    let candlestickSelectedPatterns = [];
     
     function candlestickScreenerView() {
         const market = document.getElementById('market')?.value || 'US';
@@ -1000,7 +1002,7 @@
                                 <th class="px-3 py-2 text-right">Close</th>
                                 <th class="px-3 py-2 text-left">Patterns</th>
                                 <th class="px-3 py-2 text-right">RSI</th>
-                                <th class="px-3 py-2 text-right">KC Lower</th>
+                                <th class="px-3 py-2 text-right">KC Threshold</th>
                                 <th class="px-3 py-2 text-center">Filters</th>
                             </tr>
                         </thead>
@@ -1009,12 +1011,12 @@
                                 <tr class="hover:bg-gray-700/50 ${s.filters_match ? 'bg-green-900/20' : ''}">
                                     <td class="px-3 py-2 font-medium text-blue-400">${s.symbol}</td>
                                     <td class="px-3 py-2">${s.date}</td>
-                                    <td class="px-3 py-2 text-right">$${s.close}</td>
+                                    <td class="px-3 py-2 text-right ${s.below_kc_threshold ? 'text-green-400 font-medium' : ''}">$${s.close}</td>
                                     <td class="px-3 py-2">
                                         ${(s.patterns || []).map(p => `<span class="px-2 py-0.5 text-xs rounded ${p.includes('Hammer') ? 'bg-green-600/30 text-green-400' : p.includes('Engulfing') ? 'bg-blue-600/30 text-blue-400' : 'bg-purple-600/30 text-purple-400'}">${p}</span>`).join(' ')}
                                     </td>
                                     <td class="px-3 py-2 text-right ${s.rsi < 30 ? 'text-green-400 font-medium' : ''}">${s.rsi || '-'}</td>
-                                    <td class="px-3 py-2 text-right">${s.kc_lower || '-'}</td>
+                                    <td class="px-3 py-2 text-right">${s.kc_threshold || '-'}</td>
                                     <td class="px-3 py-2 text-center">${s.filters_match ? '✅' : '❌'}</td>
                                 </tr>
                             `).join('')}
@@ -1031,17 +1033,26 @@
                 </div>
                 
                 <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-sm">
-                    <strong>Patterns Detected:</strong> Hammer, Bullish Engulfing, Piercing Pattern, Tweezer Bottom<br>
-                    <strong>Filters:</strong> Price &lt; KC Lower + RSI(14) &lt; 30
+                    <strong>Patterns Available:</strong> Hammer, Bullish Engulfing, Piercing Pattern, Tweezer Bottom<br>
+                    <strong>Filters:</strong> Configurable KC Level + RSI(14) &lt; 30
                 </div>
-                
+
                 <div class="bg-[#111827] rounded-xl border border-gray-700 p-4">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                         <div>
                             <label class="block text-sm font-medium mb-1">Lookback Days</label>
-                            <input type="number" id="candlestick-lookback" value="${candlestickLookbackDays}" min="30" max="365" 
+                            <input type="number" id="candlestick-lookback" value="${candlestickLookbackDays}" min="30" max="365"
                                 onchange="candlestickLookbackDays=parseInt(this.value)"
                                 class="w-full bg-[#1f2937] border border-gray-600 rounded px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">KC Channel Level</label>
+                            <select id="candlestick-kc-level" onchange="candlestickKcLevel=parseFloat(this.value)"
+                                class="w-full bg-[#1f2937] border border-gray-600 rounded px-3 py-2">
+                                <option value="0" ${candlestickKcLevel === 0 ? 'selected' : ''}>KC &lt; 0 (Below Middle)</option>
+                                <option value="-1" ${candlestickKcLevel === -1 ? 'selected' : ''}>KC &lt; -1 (Below Lower)</option>
+                                <option value="-2" ${candlestickKcLevel === -2 ? 'selected' : ''}>KC &lt; -2 (Below Lower - ATR)</option>
+                            </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-1">Filter Mode</label>
@@ -1052,15 +1063,31 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium mb-1">Selected: ${candlestickSelectedStocks.length}</label>
+                            <label class="block text-sm font-medium mb-1">Stocks: ${candlestickSelectedStocks.length}</label>
                             <div class="flex gap-2">
-                                <button onclick="candlestickSelectedStocks=[...document.querySelectorAll('#candlestick-stocks input:checked')].map(e=>e.value); toast('Selected '+candlestickSelectedStocks.length+' stocks')" 
-                                    class="px-3 py-2 bg-gray-700 rounded hover:bg-gray-600 text-sm">Update Selection</button>
-                                <button onclick="runCandlestickScreener()" 
+                                <button onclick="candlestickSelectedStocks=[...document.querySelectorAll('#candlestick-stocks input:checked')].map(e=>e.value); toast('Selected '+candlestickSelectedStocks.length+' stocks')"
+                                    class="px-3 py-2 bg-gray-700 rounded hover:bg-gray-600 text-sm">Update</button>
+                                <button onclick="runCandlestickScreener()"
                                     class="px-4 py-2 bg-blue-600 rounded hover:bg-blue-500 font-medium ${candlestickLoading ? 'opacity-50' : ''}">
                                     ${candlestickLoading ? '⏳ Scanning...' : '🔍 Scan'}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-2">Candlestick Patterns (select specific patterns or leave all unchecked for all)</label>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                            ${['Hammer', 'Bullish Engulfing', 'Piercing Pattern', 'Tweezer Bottom'].map(p => `
+                                <label class="flex items-center gap-2 px-3 py-2 rounded border ${candlestickSelectedPatterns.includes(p) ? 'border-blue-500 bg-blue-500/20' : 'border-gray-600 bg-[#1f2937]'} cursor-pointer hover:border-blue-400">
+                                    <input type="checkbox"
+                                        value="${p}"
+                                        ${candlestickSelectedPatterns.includes(p) ? 'checked' : ''}
+                                        onchange="toggleCandlestickPattern('${p}')"
+                                        class="w-4 h-4">
+                                    <span class="text-sm">${p}</span>
+                                </label>
+                            `).join('')}
                         </div>
                     </div>
                     
@@ -1081,14 +1108,24 @@
         `;
     }
     
+    function toggleCandlestickPattern(pattern) {
+        const idx = candlestickSelectedPatterns.indexOf(pattern);
+        if (idx > -1) {
+            candlestickSelectedPatterns.splice(idx, 1);
+        } else {
+            candlestickSelectedPatterns.push(pattern);
+        }
+        render();
+    }
+
     async function runCandlestickScreener() {
         candlestickLoading = true;
         render();
-        
+
         try {
             const market = document.getElementById('market')?.value || 'US';
             const symbols = candlestickSelectedStocks.map(s => market === 'IN' ? s + '.NS' : s);
-            
+
             const res = await fetch('/api/v2/screener/candlestick/run', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -1096,10 +1133,12 @@
                     symbols: symbols,
                     lookback_days: candlestickLookbackDays,
                     market: market,
-                    filter_mode: candlestickFilterMode
+                    filter_mode: candlestickFilterMode,
+                    kc_level: candlestickKcLevel,
+                    selected_patterns: candlestickSelectedPatterns.length > 0 ? candlestickSelectedPatterns : null
                 })
             });
-            
+
             const data = await res.json();
             candlestickResults = data.signals || [];
             toast(`Found ${candlestickResults.length} candlestick signals`, 'success');
