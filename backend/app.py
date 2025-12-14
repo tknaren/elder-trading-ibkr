@@ -46,7 +46,8 @@ def create_app():
     # Register API blueprints
     app.register_blueprint(api, url_prefix='/api')      # Original API
     app.register_blueprint(api_v2, url_prefix='/api/v2')  # Enhanced v2 API
-    app.register_blueprint(screener_routes, url_prefix='/api/v2/screener')  # Additional screeners
+    # Additional screeners
+    app.register_blueprint(screener_routes, url_prefix='/api/v2/screener')
 
     # Initialize database (creates tables and default data)
     with app.app_context():
