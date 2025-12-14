@@ -107,13 +107,24 @@ def run_candlestick_screener_endpoint():
         "symbols": ["AAPL", "MSFT", ...] or "all",
         "lookback_days": 180,
         "market": "US",
-        "filter_mode": "all" | "filtered_only" | "patterns_only"
+        "filter_mode": "all" | "filtered_only" | "patterns_only",
+        "kc_level": -1 | 0 | -2 (KC channel level threshold),
+        "selected_patterns": ["Hammer", "Bullish Engulfing", ...] or null for all
     }
 
     filter_mode:
         - "all": Show all patterns with indicator values (default)
         - "filtered_only": Only show patterns matching KC and RSI filters
         - "patterns_only": Only show patterns, no filter requirement
+
+    kc_level:
+        - 0: Price < KC Middle
+        - -1: Price < KC Lower (default)
+        - -2: Price < KC Lower - ATR
+
+    selected_patterns:
+        - null or empty: All patterns (default)
+        - Array: Filter by specific patterns (e.g., ["Hammer", "Bullish Engulfing"])
 
     Returns:
         Signals sorted by date with pattern and indicator info
@@ -124,6 +135,8 @@ def run_candlestick_screener_endpoint():
     lookback_days = min(max(data.get('lookback_days', 180), 30), 365)
     market = data.get('market', 'US')
     filter_mode = data.get('filter_mode', 'all')
+    kc_level = data.get('kc_level', -1.0)
+    selected_patterns = data.get('selected_patterns', None)
 
     from services.candlestick_screener import (
         run_candlestick_screener,
@@ -140,6 +153,16 @@ def run_candlestick_screener_endpoint():
     # Validate filter_mode
     if filter_mode not in ['all', 'filtered_only', 'patterns_only']:
         filter_mode = 'all'
+
+    # Validate kc_level
+    try:
+        kc_level = float(kc_level)
+    except (ValueError, TypeError):
+        kc_level = -1.0
+
+    # Validate selected_patterns
+    if selected_patterns and not isinstance(selected_patterns, list):
+        selected_patterns = None
 
     try:
         # Fetch historical data
@@ -176,11 +199,21 @@ def scan_single_candlestick(symbol):
     Query params:
         - lookback_days: Number of days to scan (default: 180)
         - filter_mode: "all" | "filtered_only" | "patterns_only" (default: "all")
+        - kc_level: KC channel level threshold (default: -1)
+        - selected_patterns: Comma-separated pattern names (default: all)
     """
     lookback_days = request.args.get('lookback_days', 180, type=int)
     filter_mode = request.args.get('filter_mode', 'all')
+    kc_level = request.args.get('kc_level', -1.0, type=float)
+    selected_patterns_param = request.args.get('selected_patterns', None)
 
     lookback_days = min(max(lookback_days, 30), 365)
+
+    # Parse selected_patterns
+    selected_patterns = None
+    if selected_patterns_param:
+        selected_patterns = [p.strip()
+                             for p in selected_patterns_param.split(',')]
 
     from services.candlestick_screener import scan_stock_candlestick_historical
 
@@ -200,7 +233,9 @@ def scan_single_candlestick(symbol):
         signals = scan_stock_candlestick_historical(
             symbol=symbol.upper(),
             hist=hist,
-            lookback_days=lookback_days
+            lookback_days=lookback_days,
+            kc_level=kc_level,
+            selected_patterns=selected_patterns
         )
 
         # Apply filter mode
@@ -213,6 +248,8 @@ def scan_single_candlestick(symbol):
             'count': len(signals),
             'lookback_days': lookback_days,
             'filter_mode': filter_mode,
+            'kc_level': kc_level,
+            'selected_patterns': selected_patterns,
             'patterns_found': list(set(
                 p for s in signals for p in s.get('patterns', [])
             ))
@@ -383,14 +420,19 @@ def get_screener_info():
                 'description': 'Scans for bullish candlestick patterns (Hammer, Engulfing, Piercing, Tweezer Bottom)',
                 'filters': [
                     'Pattern detected on daily candle',
-                    'Price below Keltner Channel Lower (KC-1)',
+                    'Price below configurable Keltner Channel level (KC 0/-1/-2)',
                     'RSI(14) < 30 (Oversold)'
                 ],
                 'patterns': ['Hammer', 'Bullish Engulfing', 'Piercing Pattern', 'Tweezer Bottom'],
+                'parameters': {
+                    'kc_level': 'KC channel threshold (0=Middle, -1=Lower, -2=Lower-ATR)',
+                    'selected_patterns': 'Array of specific patterns to filter (optional)'
+                },
                 'endpoints': {
                     'run': 'POST /api/v2/screener/candlestick/run',
                     'single': 'GET /api/v2/screener/candlestick/single/<symbol>',
-                    'stocks': 'GET /api/v2/screener/candlestick/stocks'
+                    'stocks': 'GET /api/v2/screener/candlestick/stocks',
+                    'options': 'GET /api/v2/screener/candlestick/options'
                 }
             },
             {
