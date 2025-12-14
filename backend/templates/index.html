@@ -967,8 +967,11 @@
     let candlestickLoading = false;
     let candlestickSelectedStocks = [];
     let candlestickLookbackDays = 180;
-    let candlestickFilterMode = 'all';
     let candlestickKcLevel = -1;
+    let candlestickRsiLevel = 30;
+    let candlestickKcLevel = -1;
+    let candlestickRsiLevel = 30;
+    let candlestickRsiLevel = 30;
     let candlestickSelectedPatterns = [];
     
     function candlestickScreenerView() {
@@ -1023,8 +1026,8 @@
                 </div>
                 
                 <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-sm">
-                    <strong>Patterns Available:</strong> Hammer, Bullish Engulfing, Piercing Pattern, Tweezer Bottom<br>
-                    <strong>Filters:</strong> Configurable KC Level + RSI(14) &lt; 30
+                    <strong>Patterns:</strong> Select from listbox below<br>
+                    <strong>Filters:</strong> KC Level + RSI Level
                 </div>
 
                 <div class="bg-[#111827] rounded-xl border border-gray-700 p-4">
@@ -1094,8 +1097,8 @@
                     symbols: 'all',
                     lookback_days: candlestickLookbackDays,
                     market: market,
-                    filter_mode: candlestickFilterMode,
                     kc_level: candlestickKcLevel,
+                    rsi_level: candlestickRsiLevel,
                     selected_patterns: candlestickSelectedPatterns.length > 0 ? candlestickSelectedPatterns : null
                 })
             });

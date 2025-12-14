@@ -16,8 +16,6 @@ Filter Conditions:
 Shows all indicator values even if filters don't match.
 """
 
-import os
-import csv
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -60,16 +58,12 @@ def calculate_keltner_channel(high: pd.Series, low: pd.Series, close: pd.Series,
 
 
 def calculate_rsi(close: pd.Series, period: int = 14) -> pd.Series:
-    """Calculate Relative Strength Index using Close prices (Wilder's smoothing)"""
+    """Calculate Relative Strength Index"""
     delta = close.diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
 
-    # Use Wilder's smoothing (EMA with alpha = 1/period) for RSI calculation
-    avg_gain = gain.ewm(alpha=1/period, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1/period, adjust=False).mean()
-
-    rs = avg_gain / avg_loss
+    rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
@@ -380,7 +374,9 @@ def scan_stock_candlestick_historical(
     symbol: str,
     hist: pd.DataFrame,
     lookback_days: int = 180,
-    stock_info: Dict = None
+    kc_level: float = -1.0,
+    rsi_level: int = 30,
+    selected_patterns: List[str] = None
 ) -> List[Dict]:
     """
     Scan a single stock's history for candlestick patterns with filters
@@ -389,7 +385,10 @@ def scan_stock_candlestick_historical(
         symbol: Stock ticker
         hist: Historical OHLCV dataframe
         lookback_days: Number of days to scan
-        stock_info: Dict with Name, Market Cap, Sector, Industry
+        kc_level: KC channel level threshold (e.g., 0, -1, -2)
+        rsi_level: RSI threshold level (e.g., 60, 50, 40, 30)
+        rsi_level: RSI threshold level (e.g., 60, 50, 40, 30)
+        selected_patterns: List of patterns to filter (None = all patterns)
 
     Returns:
         List of signals with pattern info and indicator values
@@ -404,19 +403,20 @@ def scan_stock_candlestick_historical(
     if not indicators:
         return []
 
-    # Calculate cutoff date for lookback period
-    latest_date = hist.index[-1]
-    cutoff_date = latest_date - pd.Timedelta(days=lookback_days)
-
-    # Scan each day starting from day 50 for indicator stability
+    # Scan each day
     for i in range(50, len(hist)):
         df_slice = hist.iloc[:i+1].copy()
         current_row = df_slice.iloc[-1]
         date = df_slice.index[-1]
 
-        # Skip if date is outside lookback period
-        if date < cutoff_date:
-            continue
+        # Skip if date is older than lookback
+        if isinstance(date, pd.Timestamp):
+            date_check = date.to_pydatetime()
+        else:
+            date_check = date
+
+        if hasattr(date_check, 'date'):
+            date_check = date_check.date() if hasattr(date_check, 'date') else date_check
 
         # Get indicator values for this date
         idx = i
@@ -449,10 +449,8 @@ def scan_stock_candlestick_historical(
 
             # Filter by selected patterns if specified
             if selected_patterns:
-                pattern_names = [
-                    p for p in pattern_names if p in selected_patterns]
-                patterns = [p for p in patterns if p.get(
-                    'pattern') in selected_patterns]
+                pattern_names = [p for p in pattern_names if p in selected_patterns]
+                patterns = [p for p in patterns if p.get('pattern') in selected_patterns]
 
             # Skip if no matching patterns after filtering
             if not pattern_names:
@@ -472,12 +470,11 @@ def scan_stock_candlestick_historical(
                 # For other levels, use kc_middle + (kc_level * ATR)
                 atr_val = float(indicators['atr'].iloc[idx]) if not pd.isna(
                     indicators['atr'].iloc[idx]) else 0
-                kc_threshold = kc_middle + \
-                    (kc_level * atr_val) if kc_middle and atr_val else kc_middle
+                kc_threshold = kc_middle + (kc_level * atr_val) if kc_middle and atr_val else kc_middle
 
             # Calculate filter conditions
             below_kc_threshold = close_price < kc_threshold if kc_threshold else False
-            rsi_oversold = rsi_val < 30 if rsi_val else False
+            rsi_oversold = rsi_val < rsi_level if rsi_val else False
 
             # All filters must match for the stock to be filtered
             filters_match = below_kc_threshold and rsi_oversold
@@ -501,10 +498,6 @@ def scan_stock_candlestick_historical(
 
             signal = {
                 'symbol': symbol,
-                'name': stock_info.get('Name', '') if stock_info else '',
-                'market_cap': stock_info.get('Market Cap', '') if stock_info else '',
-                'sector': stock_info.get('Sector', '') if stock_info else '',
-                'industry': stock_info.get('Industry', '') if stock_info else '',
                 'date': str(date)[:10] if hasattr(date, 'strftime') else str(date)[:10],
                 'patterns': pattern_names,
                 'pattern_count': len(patterns),
@@ -536,7 +529,9 @@ def run_candlestick_screener(
     hist_data: Dict[str, pd.DataFrame],
     lookback_days: int = 180,
     filter_mode: str = 'all',  # 'all', 'filtered_only', 'patterns_only'
-    stock_info_map: Dict[str, Dict] = None
+    kc_level: float = -1.0,
+    rsi_level: int = 30,
+    selected_patterns: List[str] = None
 ) -> Dict:
     """
     Run candlestick pattern screener across multiple symbols
@@ -549,7 +544,10 @@ def run_candlestick_screener(
             'all' - Show all patterns with indicator values
             'filtered_only' - Only show patterns matching KC and RSI filters
             'patterns_only' - Only show patterns, no filter requirement
-        stock_info_map: Dict of symbol -> company info (Name, Market Cap, Sector, Industry)
+        kc_level: KC channel level threshold (e.g., 0, -1, -2)
+        rsi_level: RSI threshold level (e.g., 60, 50, 40, 30)
+        rsi_level: RSI threshold level (e.g., 60, 50, 40, 30)
+        selected_patterns: List of patterns to filter (None = all patterns)
 
     Returns:
         Dict with signals, summary, and metadata
@@ -563,9 +561,8 @@ def run_candlestick_screener(
             if hist is None or len(hist) < 50:
                 continue
 
-            stock_info = stock_info_map.get(symbol) if stock_info_map else None
             signals = scan_stock_candlestick_historical(
-                symbol, hist, lookback_days, stock_info)
+                symbol, hist, lookback_days, kc_level, selected_patterns)
 
             if signals:
                 # Apply filter mode
@@ -603,55 +600,53 @@ def run_candlestick_screener(
         'lookback_days': lookback_days,
         'filter_mode': filter_mode,
         'kc_level': kc_level,
+        'rsi_level': rsi_level,
         'selected_patterns': selected_patterns
     }
 
 
-# Stock list loader
+# Stock lists
+NASDAQ_100 = [
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AMD', 'AVGO', 'NFLX',
+    'COST', 'PEP', 'ADBE', 'CSCO', 'INTC', 'QCOM', 'TXN', 'INTU', 'AMAT', 'MU',
+    'LRCX', 'KLAC', 'SNPS', 'CDNS', 'MRVL', 'ON', 'NXPI', 'ADI', 'MCHP', 'FTNT',
+    'VRTX', 'CHTR', 'ASML', 'CRWD', 'MNST', 'TEAM', 'PAYX', 'AEP', 'CPRT', 'PCAR',
+    'AMGN', 'MRNA', 'XEL', 'WDAY', 'ABNB', 'MDLZ', 'ANSS', 'DDOG', 'ODFL', 'GOOG',
+    'IDXX', 'ISRG', 'ORLY', 'CTAS', 'SBUX', 'PANW', 'LULU', 'BKNG', 'ADP', 'REGN',
+    'KDP', 'MAR', 'MELI', 'KLAC', 'PYPL', 'SNPS', 'CDNS', 'CEG', 'FAST', 'GEHC',
+    'KHC', 'DXCM', 'CCEP', 'FANG', 'TTWO', 'CDW', 'VRSK', 'DLTR', 'BIIB', 'ILMN',
+    'EA', 'WBD', 'ZS', 'ALGN', 'ENPH', 'SIRI', 'LCID', 'RIVN', 'HOOD', 'COIN',
+    'ARM', 'SMCI', 'CRSP', 'TTD', 'DASH', 'MSTR', 'PLTR', 'ANET', 'MDB', 'DKNG'
+]
+
+NIFTY_100 = [
+    'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
+    'HINDUNILVR.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'ITC.NS', 'KOTAKBANK.NS',
+    'LT.NS', 'AXISBANK.NS', 'ASIANPAINT.NS', 'MARUTI.NS', 'TITAN.NS',
+    'SUNPHARMA.NS', 'ULTRACEMCO.NS', 'BAJFINANCE.NS', 'WIPRO.NS', 'HCLTECH.NS',
+    'TATAMOTORS.NS', 'POWERGRID.NS', 'NTPC.NS', 'M&M.NS', 'JSWSTEEL.NS',
+    'TATASTEEL.NS', 'ADANIENT.NS', 'ONGC.NS', 'COALINDIA.NS', 'GRASIM.NS',
+    'BAJAJFINSV.NS', 'TECHM.NS', 'HINDALCO.NS', 'DIVISLAB.NS', 'DRREDDY.NS',
+    'CIPLA.NS', 'BPCL.NS', 'INDUSINDBK.NS', 'EICHERMOT.NS', 'BRITANNIA.NS',
+    'HEROMOTOCO.NS', 'APOLLOHOSP.NS', 'SBILIFE.NS', 'HDFCLIFE.NS', 'TATACONSUM.NS',
+    'ADANIPORTS.NS', 'LTIM.NS', 'NESTLEIND.NS', 'DABUR.NS', 'PIDILITIND.NS',
+    # Next 50
+    'ABB.NS', 'ACC.NS', 'ADANIGREEN.NS', 'AMBUJACEM.NS', 'AUROPHARMA.NS',
+    'BAJAJHLDNG.NS', 'BANKBARODA.NS', 'BERGEPAINT.NS', 'BOSCHLTD.NS', 'CANBK.NS',
+    'CHOLAFIN.NS', 'COLPAL.NS', 'CONCOR.NS', 'DLF.NS', 'GAIL.NS',
+    'GODREJCP.NS', 'HAL.NS', 'HAVELLS.NS', 'ICICIPRULI.NS', 'INDUSTOWER.NS',
+    'IOC.NS', 'IRCTC.NS', 'JINDALSTEL.NS', 'JUBLFOOD.NS', 'LTF.NS',
+    'LUPIN.NS', 'MCDOWELL-N.NS', 'MARICO.NS', 'MUTHOOTFIN.NS', 'NAUKRI.NS',
+    'NHPC.NS', 'NMDC.NS', 'OBEROIRLTY.NS', 'OFSS.NS', 'PAGEIND.NS',
+    'PEL.NS', 'PFC.NS', 'PIIND.NS', 'PNB.NS', 'POLYCAB.NS',
+    'RECLTD.NS', 'SAIL.NS', 'SRF.NS', 'SIEMENS.NS', 'TATAPOWER.NS',
+    'TORNTPHARM.NS', 'TRENT.NS', 'UPL.NS', 'VBL.NS', 'ZOMATO.NS'
+]
 
 
-def load_nasdaq_stocks_from_csv():
-    """
-    Load NASDAQ stocks from CSV file with company details
-
-    Returns:
-        Tuple of (symbols: List[str], stock_info_map: Dict[str, Dict])
-        where stock_info_map contains Name, Market Cap, Sector, Industry for each symbol
-    """
-    csv_path = os.path.join(os.path.dirname(__file__),
-                            '..', '..', 'docs', 'nasdaq_screener.csv')
-    symbols = []
-    stock_info_map = {}
-
-    try:
-        with open(csv_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                symbol = row.get('Symbol', '').strip()
-                if symbol:
-                    symbols.append(symbol)
-                    stock_info_map[symbol] = {
-                        'Name': row.get('Name', '').strip(),
-                        'Market Cap': row.get('Market Cap', '').strip(),
-                        'Sector': row.get('Sector', '').strip(),
-                        'Industry': row.get('Industry', '').strip()
-                    }
-    except Exception as e:
-        print(f"Error loading NASDAQ stocks from CSV: {e}")
-        # Return empty if file not found or error
-        return [], {}
-
-    return symbols, stock_info_map
-
-
-def get_stock_list(market: str = 'US'):
-    """
-    Get available stock list with company information
-
-    Returns:
-        Tuple of (symbols: List[str], stock_info_map: Dict[str, Dict])
-    """
+def get_stock_list(market: str = 'US') -> List[str]:
+    """Get available stock list"""
     if market.upper() == 'US':
-        return load_nasdaq_stocks_from_csv()
+        return NASDAQ_100
     else:
         return NIFTY_100
