@@ -373,7 +373,9 @@ def calculate_all_indicators(df: pd.DataFrame) -> Dict:
 def scan_stock_candlestick_historical(
     symbol: str,
     hist: pd.DataFrame,
-    lookback_days: int = 180
+    lookback_days: int = 180,
+    kc_level: float = -1.0,
+    selected_patterns: List[str] = None
 ) -> List[Dict]:
     """
     Scan a single stock's history for candlestick patterns with filters
@@ -382,6 +384,8 @@ def scan_stock_candlestick_historical(
         symbol: Stock ticker
         hist: Historical OHLCV dataframe
         lookback_days: Number of days to scan
+        kc_level: KC channel level threshold (e.g., 0, -1, -2)
+        selected_patterns: List of patterns to filter (None = all patterns)
 
     Returns:
         List of signals with pattern info and indicator values
@@ -440,12 +444,37 @@ def scan_stock_candlestick_historical(
             pattern_names = [p['pattern']
                              for p in patterns if p.get('pattern')]
 
+            # Filter by selected patterns if specified
+            if selected_patterns:
+                pattern_names = [p for p in pattern_names if p in selected_patterns]
+                patterns = [p for p in patterns if p.get('pattern') in selected_patterns]
+
+            # Skip if no matching patterns after filtering
+            if not pattern_names:
+                continue
+
+            # Calculate KC threshold based on kc_level
+            # kc_level: 0 means price < kc_middle, -1 means price < kc_lower, -2 means price < (kc_lower - ATR)
+            if kc_level == 0:
+                kc_threshold = kc_middle
+            elif kc_level == -1:
+                kc_threshold = kc_lower
+            elif kc_level == -2:
+                atr_val = float(indicators['atr'].iloc[idx]) if not pd.isna(
+                    indicators['atr'].iloc[idx]) else 0
+                kc_threshold = kc_lower - atr_val if kc_lower and atr_val else kc_lower
+            else:
+                # For other levels, use kc_middle + (kc_level * ATR)
+                atr_val = float(indicators['atr'].iloc[idx]) if not pd.isna(
+                    indicators['atr'].iloc[idx]) else 0
+                kc_threshold = kc_middle + (kc_level * atr_val) if kc_middle and atr_val else kc_middle
+
             # Calculate filter conditions
-            below_kc_lower = close_price < kc_lower if kc_lower else False
+            below_kc_threshold = close_price < kc_threshold if kc_threshold else False
             rsi_oversold = rsi_val < 30 if rsi_val else False
 
             # All filters must match for the stock to be filtered
-            filters_match = below_kc_lower and rsi_oversold
+            filters_match = below_kc_threshold and rsi_oversold
 
             # Sanitize pattern_details to ensure JSON serializable
             pattern_details_clean = []
@@ -476,12 +505,13 @@ def scan_stock_candlestick_historical(
                 'kc_lower': round(float(kc_lower), 2) if kc_lower else None,
                 'kc_middle': round(float(kc_middle), 2) if kc_middle else None,
                 'kc_upper': round(float(kc_upper), 2) if kc_upper else None,
+                'kc_threshold': round(float(kc_threshold), 2) if kc_threshold else None,
                 'macd': round(float(macd_val), 3) if macd_val else None,
                 'macd_signal': round(float(signal_val), 3) if signal_val else None,
                 'macd_hist': round(float(macd_hist), 3) if macd_hist else None,
                 'stoch_k': round(float(stoch_k), 1) if stoch_k else None,
                 # Filter status
-                'below_kc_lower': bool(below_kc_lower),
+                'below_kc_threshold': bool(below_kc_threshold),
                 'rsi_oversold': bool(rsi_oversold),
                 'filters_match': bool(filters_match)
             }
@@ -495,7 +525,9 @@ def run_candlestick_screener(
     symbols: List[str],
     hist_data: Dict[str, pd.DataFrame],
     lookback_days: int = 180,
-    filter_mode: str = 'all'  # 'all', 'filtered_only', 'patterns_only'
+    filter_mode: str = 'all',  # 'all', 'filtered_only', 'patterns_only'
+    kc_level: float = -1.0,
+    selected_patterns: List[str] = None
 ) -> Dict:
     """
     Run candlestick pattern screener across multiple symbols
@@ -504,10 +536,12 @@ def run_candlestick_screener(
         symbols: List of stock tickers
         hist_data: Dict of symbol -> DataFrame with OHLCV data
         lookback_days: Number of days to scan
-        filter_mode: 
+        filter_mode:
             'all' - Show all patterns with indicator values
             'filtered_only' - Only show patterns matching KC and RSI filters
             'patterns_only' - Only show patterns, no filter requirement
+        kc_level: KC channel level threshold (e.g., 0, -1, -2)
+        selected_patterns: List of patterns to filter (None = all patterns)
 
     Returns:
         Dict with signals, summary, and metadata
@@ -522,7 +556,7 @@ def run_candlestick_screener(
                 continue
 
             signals = scan_stock_candlestick_historical(
-                symbol, hist, lookback_days)
+                symbol, hist, lookback_days, kc_level, selected_patterns)
 
             if signals:
                 # Apply filter mode
@@ -558,7 +592,9 @@ def run_candlestick_screener(
         'summary': summary,
         'symbols_scanned': len(symbols),
         'lookback_days': lookback_days,
-        'filter_mode': filter_mode
+        'filter_mode': filter_mode,
+        'kc_level': kc_level,
+        'selected_patterns': selected_patterns
     }
 
 
