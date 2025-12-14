@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(python update_candlestick_ui.py:*)",
-      "Bash(python update_backend_rsi.py:*)"
+      "Bash(python update_backend_rsi.py:*)",
+      "Bash(python app.py:*)",
+      "Bash(git checkout:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []
